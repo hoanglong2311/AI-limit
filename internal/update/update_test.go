@@ -82,7 +82,7 @@ func server(t *testing.T, dmg []byte, shaFile string, status int) (*Checker, str
 	mux.HandleFunc("/a.dmg.sha256", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, shaFile) })
 	s = httptest.NewServer(mux)
 	t.Cleanup(s.Close)
-	return &Checker{URL: s.URL + "/latest", HTTP: s.Client()}, s.URL
+	return &Checker{URL: s.URL + "/latest", HTTP: s.Client(), AllowAnyHost: true}, s.URL
 }
 
 func TestDownloadVerified(t *testing.T) {

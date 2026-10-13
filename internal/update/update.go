@@ -120,6 +120,8 @@ func Newer(candidate, current string) bool {
 type Checker struct {
 	URL  string       // default LatestURL
 	HTTP *http.Client // default http.DefaultClient
+	// AllowAnyHost disables the download host allowlist; tests only.
+	AllowAnyHost bool
 }
 
 func (c *Checker) client() *http.Client {
@@ -127,6 +129,23 @@ func (c *Checker) client() *http.Client {
 		return c.HTTP
 	}
 	return http.DefaultClient
+}
+
+// dl is the client for release assets: redirects stay in the allowlist.
+// Tests that inject HTTP (httptest servers) bypass the allowlist via
+// AllowAnyHost.
+func (c *Checker) dl() *http.Client {
+	if c.AllowAnyHost {
+		return c.client()
+	}
+	return downloadClient(c.HTTP)
+}
+
+func (c *Checker) allowed(u string) error {
+	if c.AllowAnyHost {
+		return nil
+	}
+	return AllowedURL(u)
 }
 
 func get(ctx context.Context, hc *http.Client, url string, limit int64) ([]byte, int, error) {
@@ -168,8 +187,8 @@ func (c *Checker) Latest(ctx context.Context, current string) (Release, bool, er
 
 // ExpectedSHA prefers the .sha256 asset, falling back to the notes.
 func (c *Checker) ExpectedSHA(ctx context.Context, r Release) (string, error) {
-	if r.SHA256URL != "" {
-		b, code, err := get(ctx, c.client(), r.SHA256URL, 4096)
+	if r.SHA256URL != "" && c.allowed(r.SHA256URL) == nil {
+		b, code, err := get(ctx, c.dl(), r.SHA256URL, 4096)
 		if err == nil && code == http.StatusOK {
 			if m := hexRe.FindString(string(b)); m != "" {
 				return strings.ToLower(m), nil
@@ -185,6 +204,9 @@ func (c *Checker) ExpectedSHA(ctx context.Context, r Release) (string, error) {
 // Download saves the dmg into dir and verifies it; on mismatch the file is
 // deleted and an error returned. It returns the path of the verified file.
 func (c *Checker) Download(ctx context.Context, r Release, dir string) (string, error) {
+	if err := c.allowed(r.DMGURL); err != nil {
+		return "", err
+	}
 	want, err := c.ExpectedSHA(ctx, r)
 	if err != nil {
 		return "", err
@@ -194,9 +216,12 @@ func (c *Checker) Download(ctx context.Context, r Release, dir string) (string, 
 		return "", err
 	}
 	req.Header.Set("User-Agent", "ai-limit/"+Current)
-	resp, err := c.client().Do(req)
+	resp, err := c.dl().Do(req)
 	if err != nil {
-		return "", fmt.Errorf("tải thất bại: %w", err)
+		if errors.Is(err, ErrHost) {
+			return "", ErrHost
+		}
+		return "", errors.New("tải thất bại: lỗi mạng")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -217,7 +242,7 @@ func (c *Checker) Download(ctx context.Context, r Release, dir string) (string, 
 		err = cerr
 	}
 	if err != nil {
-		return "", fmt.Errorf("tải thất bại: %w", err)
+		return "", errors.New("tải thất bại: lỗi ghi file")
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); !Verify(got, want) {
 		return "", fmt.Errorf("SHA-256 không khớp (nhận %s…, cần %s…)", got[:12], want[:min(12, len(want))])
@@ -231,7 +256,8 @@ func (c *Checker) Download(ctx context.Context, r Release, dir string) (string, 
 
 // Verify compares two hex digests case-insensitively.
 func Verify(got, want string) bool {
-	return len(want) == 64 && strings.EqualFold(strings.TrimSpace(got), strings.TrimSpace(want))
+	got, want = strings.TrimSpace(got), strings.TrimSpace(want)
+	return len(want) == 64 && hexRe.MatchString(want) && strings.EqualFold(got, want)
 }
 
 // FileSHA256 hashes a file.

@@ -56,15 +56,20 @@ func (a *app) startUpdate() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		p, err := a.upd.checker.Download(ctx, r, downloadDir())
-		if err == nil {
-			err = exec.Command("/usr/bin/open", p).Run()
+		if err != nil {
+			a.win.Update(func() { a.upd.busy, a.upd.err = false, "Cập nhật lỗi: "+err.Error() })
+			return
 		}
-		a.win.Update(func() {
-			a.upd.busy = false
-			if err != nil {
-				a.upd.err = "Cập nhật lỗi: " + err.Error()
+		if err := selfUpdate(ctx, p, r.Version); err != nil {
+			// Old app untouched: fall back to the manual install.
+			msg := "Không tự cập nhật được: " + err.Error() + "."
+			if exec.Command("/usr/bin/open", p).Run() == nil {
+				msg += " Đã mở file dmg, kéo AI-limit vào Applications để cài."
 			}
-		})
+			a.win.Update(func() { a.upd.busy, a.upd.err = false, msg })
+			return
+		}
+		a.win.Update(a.quitForUpdate)
 	}()
 }
 
@@ -76,7 +81,7 @@ func (a *app) updateButton(c *ui.Context) {
 	}
 	label := view.UpdateLabel(a.upd.rel.Tag)
 	if a.upd.busy {
-		label = "Đang tải…"
+		label = "Đang cập nhật…"
 	}
 	ui.Button(c, label).FontSize(view.SmallSize).TextColor(c.Theme().Accent).
 		Disabled(a.upd.busy).OnClick(a.startUpdate)

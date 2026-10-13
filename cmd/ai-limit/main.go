@@ -197,6 +197,7 @@ func (a *app) ready() {
 	})
 	a.tray.OnClick(a.toggle)
 	a.rows = a.sched.Snapshot()
+	markLaunched()
 	ctx, cancel := context.WithCancel(context.Background())
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { cancel(); a.tray.Destroy() })
 	go a.sched.Run(ctx)
@@ -247,6 +248,9 @@ func main() {
 	codexLabel := flag.String("codex-label", cfg.CodexLabel, "nhãn tài khoản Codex")
 	demo := flag.Bool("demo", cfg.Demo, "hiện các provider mock")
 	flag.Parse()
+	if *finishUpdate {
+		runFinishHelper()
+	}
 
 	var ps []provider.Provider
 	if *demo {

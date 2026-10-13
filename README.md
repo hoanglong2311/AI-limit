@@ -25,8 +25,22 @@ pure Go, không cần cgo.
 Cập nhật trong app: khi mở, mỗi 3 giờ và khi bấm **Làm mới**, app hỏi GitHub (không dùng
 token) xem có bản mới không. Nếu có, nút "Cập nhật lên vX.Y.Z" hiện ở cuối
 menu: bấm để tải dmg vào `~/Downloads`, app kiểm tra SHA-256 với file
-`.sha256` của bản phát hành (hoặc ghi chú phát hành) rồi mới mở dmg; không
-khớp thì xoá file và báo lỗi. Mất mạng hay bị giới hạn lượt gọi thì bỏ qua.
+`.sha256` của bản phát hành (hoặc ghi chú phát hành); không khớp thì xoá
+file và báo lỗi. Mất mạng hay bị giới hạn lượt gọi thì bỏ qua.
+
+Tự cập nhật (v0.1.7): chỉ tải qua HTTPS từ `github.com` (đúng repo này) và
+máy chủ tải của GitHub (`objects.githubusercontent.com`,
+`release-assets.githubusercontent.com`), kể cả khi chuyển hướng. Sau khi
+khớp SHA-256, app mount dmg chỉ đọc (`hdiutil attach -nobrowse -readonly`
+vào thư mục tạm), yêu cầu dmg có đúng một `AI-limit.app` với bundle id
+giống app đang chạy và phiên bản đúng bản vừa tải, chép bằng `ditto` vào
+thư mục tạm cạnh app hiện tại, kiểm tra `codesign --verify --deep --strict`,
+tháo dmg, rồi đổi tên app cũ thành bản dự phòng và đưa app mới vào. Một
+tiến trình phụ chờ app cũ thoát hẳn, mở app mới (`open -n`) và chỉ xoá bản
+dự phòng khi app mới báo đã chạy; nếu không thì khôi phục bản cũ. Không
+dùng sudo, không hỏi quyền admin, không xoá thuộc tính quarantine. Lỗi bất
+kỳ (SHA sai, không mount được, không có quyền ghi, chạy từ dmg hay App
+Translocation…) giữ nguyên app cũ, báo lỗi và mở dmg để cài thủ công.
 
 Nâng cấp thủ công: thoát app (Thoát hoặc Cmd+Q), kéo bản mới vào `Applications`
 và chọn Replace.
