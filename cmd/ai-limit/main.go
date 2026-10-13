@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"flag"
-	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -21,9 +20,9 @@ import (
 	"github.com/hoanglong2311/AI-limit/internal/providers/claude"
 	"github.com/hoanglong2311/AI-limit/internal/providers/codex"
 	"github.com/hoanglong2311/AI-limit/internal/providers/deepseek"
-	"github.com/hoanglong2311/AI-limit/internal/providers/grokbuild"
 	"github.com/hoanglong2311/AI-limit/internal/providers/mock"
 	"github.com/hoanglong2311/AI-limit/internal/scheduler"
+	"github.com/hoanglong2311/AI-limit/internal/view"
 )
 
 type app struct {
@@ -34,53 +33,67 @@ type app struct {
 	quitting bool
 }
 
-func fmtTime(t time.Time) string {
-	if t.IsZero() {
-		return "—"
+// barColors maps view levels to theme colors.
+func barColor(t *ui.Theme, l view.Level) ui.Color {
+	switch l {
+	case view.Red:
+		return t.Danger
+	case view.Yellow:
+		return t.Warning
 	}
-	return t.Local().Format("15:04 02/01")
+	return t.Success
 }
 
-func fmtMoney(v float64, cur string) string {
-	switch cur {
-	case "USD", "":
-		return fmt.Sprintf("$%.2f", v)
-	case "CNY":
-		return fmt.Sprintf("¥%.2f CNY", v)
-	}
-	return fmt.Sprintf("%.2f %s", v, cur)
-}
-
-func (a *app) row(c *ui.Context, s scheduler.State) {
+func (a *app) line(c *ui.Context, now time.Time, l view.Line) {
 	t := c.Theme()
-	card := ui.Column(c.Key(s.ID)).Gap(4).Padding(8).Radius(8)
-	if s.High() {
-		card = card.Background(t.Warning.Alpha(0.18))
-	}
-	card.Children(func() {
-		ui.Row(c).Gap(6).Children(func() {
-			name := ui.Text(c, s.Service).Bold()
-			if s.High() {
-				name.TextColor(t.Danger)
-			}
-			ui.Text(c, s.Account).Grow(1).TextColor(t.TextMuted)
+	s := l.State
+	ui.Column(c.Key(s.ID)).Gap(2).Children(func() {
+		ui.Row(c).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, l.Label).FontSize(view.BodySize).Width(view.LabelWidth).TextColor(t.TextMuted)
 			switch {
 			case !s.Fresh():
-				ui.Text(c, s.Label()).TextColor(t.Danger)
-			case s.Usage.Kind == provider.KindBalance:
-				ui.Text(c, fmtMoney(s.Usage.Balance, s.Usage.Currency)).Bold()
-			default:
-				pct := ui.Text(c, fmt.Sprintf("%.0f%%", s.Usage.UsedPercent))
-				if s.High() {
-					pct.Bold().TextColor(t.Danger)
+				lbl := ui.Text(c, s.Label()).FontSize(view.BodySize).Grow(1)
+				if s.Status == scheduler.StatusError {
+					lbl.TextColor(t.Danger)
+				} else {
+					lbl.TextColor(t.TextMuted)
 				}
+			case s.Usage.Kind == provider.KindBalance:
+				ui.Spacer(c)
+				ui.Text(c, view.Money(s.Usage.Balance, s.Usage.Currency)).FontSize(view.BodySize).
+					FontWeight(600).FontFeatures("tnum")
+			default:
+				p := min(max(s.Usage.UsedPercent, 0), 100)
+				ui.Box(c).Width(view.BarWidth).Height(view.BarHeight).Radius(view.BarRadius).
+					Background(t.TextMuted.Alpha(0.2)).Children(func() {
+					ui.Box(c).Width(float32(p / 100 * view.BarWidth)).Height(view.BarHeight).
+						Radius(view.BarRadius).Background(barColor(t, view.LevelFor(p)))
+				})
+				ui.Text(c, view.Percent(s.Usage.UsedPercent)).FontSize(view.BodySize).
+					Width(view.PctWidth).TextAlign(ui.End).FontFeatures("tnum")
 			}
 		})
-		if s.Fresh() && s.Usage.Kind == provider.KindQuota {
-			ui.Progress(c, s.Usage.UsedPercent/100)
-			ui.Text(c, "Reset: "+fmtTime(s.Usage.ResetAt)).FontSize(11).TextColor(t.TextMuted)
+		if n := view.Note(now, s); n != "" {
+			ui.Text(c, n).FontSize(view.SmallSize).TextColor(t.TextMuted).
+				FontFeatures("tnum").Padding(0, 0, 0, view.SubIndent)
 		}
-		ui.Text(c, "Cập nhật thành công lần cuối: "+fmtTime(s.LastSuccess)).FontSize(11).TextColor(t.TextMuted)
+	})
+}
+
+func (a *app) block(c *ui.Context, now time.Time, b view.Block) {
+	t := c.Theme()
+	ui.Column(c.Key(b.Title)).Gap(view.TitleGap).Children(func() {
+		ui.Row(c).Gap(view.ColGap).Children(func() {
+			ui.Text(c, b.Title).FontSize(view.TitleSize).FontWeight(600).Grow(1)
+			if b.Account != "" {
+				ui.Text(c, b.Account).FontSize(view.SmallSize).TextColor(t.TextMuted)
+			}
+		})
+		ui.Column(c).Gap(view.RowGap).Children(func() {
+			for _, l := range b.Lines {
+				a.line(c, now, l)
+			}
+		})
 	})
 }
 
@@ -89,17 +102,20 @@ func (a *app) view(c *ui.Context) {
 		a.win.Hide()
 	}
 	c.OnShortcut(ui.Cmd, ui.KeyQ, mygo.App.Quit)
-	ui.Column(c).Fill().Padding(12).Gap(8).Children(func() {
-		ui.Text(c, "AI Limit").FontSize(16).Bold()
+	now := time.Now()
+	t := c.Theme()
+	ui.Column(c).Fill().Padding(view.Pad).Gap(view.FooterGap).Children(func() {
 		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Gap(6).Children(func() {
-				for _, s := range a.rows {
-					a.row(c, s)
+			ui.Column(c).Gap(view.BlockGap).Children(func() {
+				for _, b := range view.Group(a.rows) {
+					a.block(c, now, b)
 				}
 			})
 		})
-		ui.Row(c).Gap(8).Children(func() {
-			ui.Spacer(c)
+		ui.Divider(c)
+		ui.Row(c).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, view.LastUpdated(now, a.rows)).FontSize(view.SmallSize).
+				TextColor(t.TextMuted).FontFeatures("tnum").Grow(1)
 			ui.Button(c, "Thoát").OnClick(mygo.App.Quit)
 		})
 	})
@@ -126,7 +142,7 @@ func (a *app) ready() {
 		log.Fatal("tray: ", err)
 	}
 	a.win = mygo.NewWindow(mygo.WindowOptions{
-		Title: "AI Limit", Width: 380, Height: 460, Hidden: true, Frameless: true,
+		Title: "AI Limit", Width: view.WinWidth, Height: 400, Hidden: true, Frameless: true,
 		DisableResize: true, DisableMinimize: true, DisableMaximize: true,
 		DisableFullScreen: true, AlwaysOnTop: true, SkipTaskbar: true,
 		Content: ui.View(a.view),
@@ -197,7 +213,6 @@ func main() {
 	ps = append(ps, claude.Rows(&claude.Client{Email: *claudeEmail})...)
 	ps = append(ps,
 		&deepseek.Provider{Label: "default"},
-		&grokbuild.Provider{Label: "default"},
 	)
 	a := &app{}
 	a.sched = scheduler.New(scheduler.Config{
