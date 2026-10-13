@@ -21,10 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -45,6 +42,22 @@ const (
 	// MinInterval between two scans of the log directory.
 	MinInterval = time.Minute
 )
+
+// Days is how many local-date folders before today are scanned, in
+// addition to today: 7 covers the whole weekly window.
+const Days = 7
+
+// DayDirs returns root/YYYY/MM/DD for today and the Days previous days,
+// in local time (Codex names its folders by local date), newest first.
+func DayDirs(root string, now time.Time) []string {
+	now = now.In(time.Local)
+	out := make([]string, 0, Days+1)
+	for i := 0; i <= Days; i++ {
+		d := now.AddDate(0, 0, -i)
+		out = append(out, filepath.Join(root, d.Format("2006"), d.Format("01"), d.Format("02")))
+	}
+	return out
+}
 
 // Window selects a row.
 type Window int
@@ -210,31 +223,27 @@ func (r *Reader) scan(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	root := filepath.Join(home, "sessions")
-	var files []fileInfo
-	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if p == root {
-				return err
-			}
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		n := d.Name()
-		if d.IsDir() || !strings.HasPrefix(n, "rollout-") || !strings.HasSuffix(n, ".jsonl") {
-			return nil
-		}
-		if fi, err := d.Info(); err == nil {
-			files = append(files, fileInfo{p, fi.ModTime()})
-		}
-		return nil
-	})
-	if errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(root); err != nil {
 		return Snapshot{}, provider.Stale("Codex: chưa có log trong " + root)
 	}
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("Codex: %w", err)
+	var files []fileInfo
+	for _, dir := range DayDirs(root, r.now()) {
+		if ctx.Err() != nil {
+			return Snapshot{}, ctx.Err()
+		}
+		ents, err := os.ReadDir(dir)
+		if err != nil {
+			continue // folder for that day does not exist
+		}
+		for _, e := range ents {
+			n := e.Name()
+			if e.IsDir() || !strings.HasPrefix(n, "rollout-") || !strings.HasSuffix(n, ".jsonl") {
+				continue
+			}
+			if fi, err := e.Info(); err == nil {
+				files = append(files, fileInfo{filepath.Join(dir, n), fi.ModTime()})
+			}
+		}
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
 	if len(files) > MaxFiles {

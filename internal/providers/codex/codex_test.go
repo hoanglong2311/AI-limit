@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -160,5 +161,36 @@ func TestMinIntervalCaches(t *testing.T) {
 	cur = cur.Add(time.Minute)
 	if u, _ := p.Fetch(context.Background()); u.UsedPercent != 90 {
 		t.Fatalf("should rescan, got %v", u.UsedPercent)
+	}
+}
+
+func TestOnlyLastSevenDayFolders(t *testing.T) {
+	old := time.Local
+	time.Local = time.UTC
+	defer func() { time.Local = old }()
+	now := ts("2026-10-13T02:00:00Z")
+	dirs := DayDirs("/r", now)
+	if len(dirs) != Days+1 || dirs[0] != filepath.Join("/r", "2026", "10", "13") || dirs[Days] != filepath.Join("/r", "2026", "10", "06") {
+		t.Fatalf("dirs %v", dirs)
+	}
+	home := t.TempDir()
+	line := func(p float64) string {
+		return fmt.Sprintf(`{"timestamp":"2026-10-13T01:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":%v,"window_minutes":300,"resets_at":1791867600}}}}`+"\n", p)
+	}
+	write := func(rel string, p float64, mod time.Time) {
+		f := filepath.Join(home, "sessions", rel)
+		os.MkdirAll(filepath.Dir(f), 0o755)
+		os.WriteFile(f, []byte(line(p)), 0o644)
+		os.Chtimes(f, mod, mod)
+	}
+	// Outside the range, though newest by mtime: must be ignored.
+	write("2026/10/05/rollout-out.jsonl", 99, now)
+	write("2025/01/01/rollout-ancient.jsonl", 98, now)
+	write("misc/rollout-stray.jsonl", 97, now)
+	// Inside the range.
+	write("2026/10/06/rollout-in.jsonl", 40, now.Add(-time.Hour))
+	u5, e5, _, _ := fetch(t, home, now)
+	if e5 != nil || u5.UsedPercent != 40 {
+		t.Fatalf("want 40 from in-range folder, got %+v %v", u5, e5)
 	}
 }

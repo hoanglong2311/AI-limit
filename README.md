@@ -100,7 +100,8 @@ ghi ở `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (hoặc `$CODEX_HOME`).
 Mỗi lượt, Codex ghi một sự kiện `token_count` có `rate_limits.primary`
 (cửa sổ 5 giờ, `window_minutes` 300) và `rate_limits.secondary` (tuần,
 10080), với `used_percent` và `resets_at`. App lấy bản ghi mới nhất không
-null trong 20 file mới nhất và hiện 2 dòng `Codex 5h`, `Codex tuần`.
+null trong 20 file mới nhất của các thư mục ngày hôm nay và 7 ngày trước
+(theo giờ máy) và hiện 2 dòng `Codex 5h`, `Codex tuần`.
 `~/.codex/auth.json` không bao giờ được mở.
 
 Số liệu chỉ mới tới lượt Codex cuối cùng trên máy này. Dòng hiện
