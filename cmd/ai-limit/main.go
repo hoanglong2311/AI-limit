@@ -170,6 +170,7 @@ func perProvider(ps []provider.Provider, def time.Duration) map[string]time.Dura
 func main() {
 	interval := flag.Duration("interval", 5*time.Minute, "chu kỳ làm mới mặc định")
 	claudeEmail := flag.String("claude-email", "you@example.com", "email tài khoản Claude")
+	codexLabel := flag.String("codex-label", "ChatGPT", "nhãn tài khoản Codex")
 	demo := flag.Bool("demo", true, "hiện các provider mock")
 	flag.Parse()
 
@@ -180,10 +181,10 @@ func main() {
 			&mock.Provider{Name: "Mock", Label: "demo-balance", Balance: true},
 		)
 	}
+	ps = append(ps, codex.Rows(&codex.Reader{Label: *codexLabel})...)
 	ps = append(ps, claude.Rows(&claude.Client{Email: *claudeEmail})...)
 	ps = append(ps,
 		&deepseek.Provider{Label: "default"},
-		&codex.Provider{Label: "default"},
 		&grokbuild.Provider{Label: "default"},
 	)
 	a := &app{}

@@ -53,8 +53,8 @@ go test -race ./...
 - Dòng dùng trên 80% được in đậm và tô nền.
 - `internal/keychain`: đọc secret từ macOS Keychain (chỉ đọc, qua
   `/usr/bin/security`).
-- `internal/providers`: `mock` (demo), `deepseek`, `claude`, và các stub
-  `codex`, `grokbuild` (xem TODO trong code).
+- `internal/providers`: `mock` (demo), `deepseek`, `claude`, `codex`, và
+  stub `grokbuild` (xem TODO trong code).
 
 ## Secret
 
@@ -93,6 +93,21 @@ App gọi `GET https://api.anthropic.com/api/oauth/usage` (header
 kèm thời điểm reset. Gọi tối đa 1 lần mỗi 5 phút vì endpoint này giới hạn
 tần suất rất chặt (429 sẽ hiện `lỗi`). Endpoint có thể thay đổi bất cứ lúc nào.
 
+### Codex
+
+Không cần secret và không dùng mạng: app chỉ **đọc** log phiên mà Codex CLI
+ghi ở `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (hoặc `$CODEX_HOME`).
+Mỗi lượt, Codex ghi một sự kiện `token_count` có `rate_limits.primary`
+(cửa sổ 5 giờ, `window_minutes` 300) và `rate_limits.secondary` (tuần,
+10080), với `used_percent` và `resets_at`. App lấy bản ghi mới nhất không
+null trong 20 file mới nhất và hiện 2 dòng `Codex 5h`, `Codex tuần`.
+`~/.codex/auth.json` không bao giờ được mở.
+
+Số liệu chỉ mới tới lượt Codex cuối cùng trên máy này. Dòng hiện
+`chưa cập nhật` khi thời điểm reset đã qua, khi dữ liệu cũ hơn độ dài cửa
+sổ, hoặc khi chưa có log có `rate_limits` (một số phiên bản Codex ghi `null`).
+Nhãn tài khoản: `-codex-label ten-cua-ban`.
+
 ## Trạng thái
 
-Đã có: mock, DeepSeek, Claude. Codex, Grok Build đang là stub và sẽ hiện `lỗi`.
+Đã có: mock, DeepSeek, Claude, Codex. Grok Build đang là stub và sẽ hiện `lỗi`.
