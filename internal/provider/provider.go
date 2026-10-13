@@ -29,7 +29,7 @@ type Usage struct {
 
 // Provider fetches usage for one account.
 type Provider interface {
-	// ID is unique and stable, e.g. "claude:me@example.com".
+	// ID is unique and stable, e.g. "claude:five_hour".
 	ID() string
 	// Service is the display name, e.g. "Claude".
 	Service() string

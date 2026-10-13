@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -72,9 +74,14 @@ type usageResponse struct {
 // Client fetches the usage once and shares it between the rows, at most
 // once per MinInterval.
 type Client struct {
+	// Email overrides the detected account email. Placeholder addresses
+	// such as you@example.com are ignored.
 	Email   string
 	BaseURL string
 	HTTP    *http.Client
+	// LocalEmail returns the email Claude Code stored locally
+	// (~/.claude.json oauthAccount.emailAddress); default reads that file.
+	LocalEmail func() string
 	// Credential returns the raw Keychain JSON; default reads the Keychain.
 	Credential  func(ctx context.Context) (string, error)
 	Now         func() time.Time
@@ -84,6 +91,51 @@ type Client struct {
 	last    time.Time
 	lastRes usageResponse
 	lastErr error
+	email   string // detected account email
+	profTry bool   // profile endpoint already tried
+}
+
+// placeholder reports example addresses that must never be shown.
+func placeholder(e string) bool {
+	e = strings.ToLower(strings.TrimSpace(e))
+	return e == "" || strings.HasSuffix(e, "@example.com") || strings.HasSuffix(e, "@example.org")
+}
+
+// AccountEmail is the real account email, or "" when unknown.
+func (c *Client) AccountEmail() string {
+	if !placeholder(c.Email) {
+		return strings.TrimSpace(c.Email)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.email == "" {
+		read := c.LocalEmail
+		if read == nil {
+			read = readLocalEmail
+		}
+		if e := read(); !placeholder(e) {
+			c.email = e
+		}
+	}
+	return c.email
+}
+
+func readLocalEmail() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".claude.json"))
+	if err != nil {
+		return ""
+	}
+	var v struct {
+		OauthAccount struct {
+			EmailAddress string `json:"emailAddress"`
+		} `json:"oauthAccount"`
+	}
+	_ = json.Unmarshal(b, &v)
+	return strings.TrimSpace(v.OauthAccount.EmailAddress)
 }
 
 func (c *Client) now() time.Time {
@@ -104,6 +156,12 @@ func (c *Client) get(ctx context.Context) (usageResponse, error) {
 		return c.lastRes, c.lastErr
 	}
 	r, err := c.fetch(ctx)
+	if err == nil && c.email == "" && placeholder(c.Email) && !c.profTry {
+		c.profTry = true
+		if e := c.profileEmail(ctx); !placeholder(e) {
+			c.email = e
+		}
+	}
 	// Do not cache a context cancellation; it says nothing about the server.
 	if ctx.Err() == nil {
 		c.last, c.lastRes, c.lastErr = c.now(), r, err
@@ -178,6 +236,50 @@ func (c *Client) fetch(ctx context.Context) (usageResponse, error) {
 	return r, nil
 }
 
+// profileEmail asks GET /api/oauth/profile for account.email; "" on error.
+func (c *Client) profileEmail(ctx context.Context) string {
+	tok, err := c.token(ctx)
+	if err != nil {
+		return ""
+	}
+	base := c.BaseURL
+	if base == "" {
+		base = DefaultBaseURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/api/oauth/profile", nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("anthropic-beta", BetaHeader)
+	req.Header.Set("User-Agent", userAgent)
+	hc := c.HTTP
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var v struct {
+		Account struct {
+			Email        string `json:"email"`
+			EmailAddress string `json:"email_address"`
+		} `json:"account"`
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&v) != nil {
+		return ""
+	}
+	if v.Account.Email != "" {
+		return v.Account.Email
+	}
+	return v.Account.EmailAddress
+}
+
 // Provider is one row (one window) of the Claude account.
 type Provider struct {
 	Client *Client
@@ -189,14 +291,14 @@ func Rows(c *Client) []provider.Provider {
 	return []provider.Provider{&Provider{c, FiveHour}, &Provider{c, SevenDay}}
 }
 
-func (p *Provider) ID() string { return "claude:" + p.Client.Email + ":" + string(p.Window) }
+func (p *Provider) ID() string { return "claude:" + string(p.Window) }
 func (p *Provider) Service() string {
 	if p.Window == FiveHour {
 		return "Claude 5h"
 	}
 	return "Claude tuần"
 }
-func (p *Provider) Account() string { return p.Client.Email }
+func (p *Provider) Account() string { return p.Client.AccountEmail() }
 
 func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
 	r, err := p.Client.get(ctx)

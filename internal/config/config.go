@@ -22,7 +22,7 @@ type Config struct {
 
 // Defaults are written when the file is missing.
 func Defaults() Config {
-	return Config{ClaudeEmail: "you@example.com", CodexLabel: "ChatGPT", Interval: "5m", Demo: false}
+	return Config{CodexLabel: "ChatGPT", Interval: "5m", Demo: false}
 }
 
 // IntervalDuration parses Interval, falling back to 5m when empty or invalid

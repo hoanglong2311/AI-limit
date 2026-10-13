@@ -40,7 +40,7 @@ func setup(t *testing.T, status int, body string, c func(context.Context) (strin
 		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(s.Close)
-	return &Client{Email: "me@example.com", BaseURL: s.URL, HTTP: s.Client(), Credential: c,
+	return &Client{Email: "me@corp.io", BaseURL: s.URL, HTTP: s.Client(), Credential: c,
 		Now: func() time.Time { return now }}, &n
 }
 
@@ -58,7 +58,7 @@ func TestBothWindowsOneRequest(t *testing.T) {
 	if n.Load() != 1 {
 		t.Fatalf("requests = %d, want 1", n.Load())
 	}
-	if rows[0].Account() != "me@example.com" || rows[0].ID() == rows[1].ID() {
+	if rows[0].Account() != "me@corp.io" || rows[0].ID() == rows[1].ID() {
 		t.Fatal("labels")
 	}
 }
@@ -131,5 +131,35 @@ func TestBadCredentialJSON(t *testing.T) {
 	c, _ := setup(t, 200, okBody, func(context.Context) (string, error) { return "{x", nil })
 	if _, err := Rows(c)[0].Fetch(context.Background()); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestEmailDetection(t *testing.T) {
+	var paths []string
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == "/api/oauth/profile" {
+			_, _ = w.Write([]byte(`{"account":{"email":"real@corp.io"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(okBody))
+	}))
+	defer s.Close()
+	c := &Client{Email: "you@example.com", BaseURL: s.URL, HTTP: s.Client(),
+		Credential: cred("tok", now.Add(time.Hour)), Now: func() time.Time { return now },
+		LocalEmail: func() string { return "" }}
+	p := Rows(c)[0]
+	if p.Account() != "" {
+		t.Fatalf("placeholder shown: %q", p.Account())
+	}
+	if _, err := p.Fetch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if p.Account() != "real@corp.io" || len(paths) != 2 {
+		t.Fatalf("account %q paths %v", p.Account(), paths)
+	}
+	c2 := &Client{LocalEmail: func() string { return "local@corp.io" }}
+	if Rows(c2)[0].Account() != "local@corp.io" {
+		t.Fatal("local email")
 	}
 }

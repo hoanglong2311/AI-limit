@@ -114,6 +114,7 @@ func (s *Scheduler) RefreshOne(ctx context.Context, p provider.Provider) {
 	s.mu.Lock()
 	st := s.states[p.ID()]
 	st.LastAttempt = now
+	st.Account = p.Account() // may be detected only after a fetch
 	if errors.Is(err, provider.ErrStale) {
 		st.Status = StatusStale
 		st.Err = err.Error()
