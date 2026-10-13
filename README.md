@@ -75,7 +75,7 @@ Xoá: `security delete-generic-password -s ai-limit.deepseek`.
 App gọi `GET https://api.deepseek.com/user/balance` và hiển thị số dư
 (`total_balance`) theo USD nếu có; nếu tài khoản chỉ có CNY thì hiển thị
 đúng CNY (không quy đổi). Thiếu key, lỗi HTTP hoặc JSON sai đều hiện `lỗi`.
-Lần đầu macOS có thể hỏi quyền cho `security` đọc mục này; chọn "Always Allow".
+Lần đầu macOS có thể hỏi quyền cho `security` đọc mục này; chọn "Allow" (chưa nên chọn "Always Allow" cho tới khi nghiệm thu xong).
 
 Claude: app chỉ đọc token mà Claude Code đã lưu (mục
 `Claude Code-credentials`) và không bao giờ refresh token.
