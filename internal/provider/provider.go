@@ -3,6 +3,8 @@ package provider
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -37,7 +39,15 @@ type Provider interface {
 	Fetch(ctx context.Context) (Usage, error)
 }
 
-// ErrNotImplemented is returned by stub providers.
+// ErrStale marks a failure where no fresh data can be fetched yet (for
+// example a missing or expired token). Wrap it; the row then shows
+// "chưa cập nhật" instead of "lỗi".
+var ErrStale = errors.New("chưa cập nhật")
+
+// Stale wraps a reason as an ErrStale error.
+func Stale(reason string) error { return fmt.Errorf("%s: %w", reason, ErrStale) }
+
+// notImpl is returned by stub providers.
 type notImpl struct{ name string }
 
 func (e notImpl) Error() string { return e.name + ": chưa triển khai" }

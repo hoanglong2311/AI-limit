@@ -156,6 +156,17 @@ func trayIcon() []byte {
 	return b.Bytes()
 }
 
+// perProvider sets intervals: Claude never more often than claude.MinInterval.
+func perProvider(ps []provider.Provider, def time.Duration) map[string]time.Duration {
+	m := map[string]time.Duration{"mock:Mock:demo-quota": 30 * time.Second}
+	for _, p := range ps {
+		if _, ok := p.(*claude.Provider); ok {
+			m[p.ID()] = max(def, claude.MinInterval)
+		}
+	}
+	return m
+}
+
 func main() {
 	interval := flag.Duration("interval", 5*time.Minute, "chu kỳ làm mới mặc định")
 	claudeEmail := flag.String("claude-email", "you@example.com", "email tài khoản Claude")
@@ -169,9 +180,9 @@ func main() {
 			&mock.Provider{Name: "Mock", Label: "demo-balance", Balance: true},
 		)
 	}
+	ps = append(ps, claude.Rows(&claude.Client{Email: *claudeEmail})...)
 	ps = append(ps,
 		&deepseek.Provider{Label: "default"},
-		&claude.Provider{Email: *claudeEmail},
 		&codex.Provider{Label: "default"},
 		&grokbuild.Provider{Label: "default"},
 	)
@@ -179,7 +190,7 @@ func main() {
 	a.sched = scheduler.New(scheduler.Config{
 		Interval:    *interval,
 		Timeout:     30 * time.Second,
-		PerProvider: map[string]time.Duration{"mock:Mock:demo-quota": 30 * time.Second},
+		PerProvider: perProvider(ps, *interval),
 	}, ps, func() {
 		if a.win == nil {
 			return

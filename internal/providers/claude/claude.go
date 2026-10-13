@@ -1,31 +1,222 @@
-// Package claude reports Claude subscription usage for one account.
+// Package claude reports Claude subscription usage (5-hour and weekly
+// windows) for one account, using the OAuth credential Claude Code already
+// stores in the macOS Keychain.
+//
+// The credential is read-only: this package never refreshes, rotates or
+// writes the token. A refresh would rotate it and log out Claude Code.
+// When the token is missing or expired the rows show "chưa cập nhật" until
+// Claude Code itself refreshes it.
+//
+// Endpoint (undocumented, used by Claude Code's /usage):
+//
+//	GET https://api.anthropic.com/api/oauth/usage
+//	Authorization: Bearer <claudeAiOauth.accessToken>
+//	anthropic-beta: oauth-2025-04-20
+//
+// Response: {"five_hour":{"utilization":33.0,"resets_at":"<RFC3339>"},
+// "seven_day":{...}, ...}; utilization is a percentage 0..100.
 package claude
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/hoanglong2311/AI-limit/internal/keychain"
 	"github.com/hoanglong2311/AI-limit/internal/provider"
 )
 
-// KeychainService is the item Claude Code stores its OAuth credentials under.
-const KeychainService = "Claude Code-credentials"
+const (
+	// KeychainService is the generic-password item Claude Code writes on macOS.
+	KeychainService = "Claude Code-credentials"
+	DefaultBaseURL  = "https://api.anthropic.com"
+	BetaHeader      = "oauth-2025-04-20"
+	// MinInterval is the shortest time between two HTTP calls; the endpoint
+	// rate-limits aggressively.
+	MinInterval = 5 * time.Minute
+	userAgent   = "ai-limit/0.1"
+)
 
-// Provider reads the token READ-ONLY. It never refreshes the token, because
-// a refresh would rotate it and log out the Claude Code client that owns it.
-type Provider struct{ Email string }
+// Window selects which usage window a row shows.
+type Window string
 
-func (p *Provider) ID() string      { return "claude:" + p.Email }
-func (p *Provider) Service() string { return "Claude" }
-func (p *Provider) Account() string { return p.Email }
+const (
+	FiveHour Window = "five_hour"
+	SevenDay Window = "seven_day"
+)
+
+// credential is the JSON stored in the Keychain item.
+type credential struct {
+	ClaudeAiOauth struct {
+		AccessToken string `json:"accessToken"`
+		ExpiresAt   int64  `json:"expiresAt"` // Unix milliseconds
+	} `json:"claudeAiOauth"`
+}
+
+type window struct {
+	Utilization *float64 `json:"utilization"`
+	ResetsAt    *string  `json:"resets_at"`
+}
+
+type usageResponse struct {
+	FiveHour *window `json:"five_hour"`
+	SevenDay *window `json:"seven_day"`
+}
+
+// Client fetches the usage once and shares it between the rows, at most
+// once per MinInterval.
+type Client struct {
+	Email   string
+	BaseURL string
+	HTTP    *http.Client
+	// Credential returns the raw Keychain JSON; default reads the Keychain.
+	Credential  func(ctx context.Context) (string, error)
+	Now         func() time.Time
+	MinInterval time.Duration
+
+	mu      sync.Mutex
+	last    time.Time
+	lastRes usageResponse
+	lastErr error
+}
+
+func (c *Client) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
+}
+
+func (c *Client) get(ctx context.Context) (usageResponse, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	min := c.MinInterval
+	if min <= 0 {
+		min = MinInterval
+	}
+	if !c.last.IsZero() && c.now().Sub(c.last) < min {
+		return c.lastRes, c.lastErr
+	}
+	r, err := c.fetch(ctx)
+	// Do not cache a context cancellation; it says nothing about the server.
+	if ctx.Err() == nil {
+		c.last, c.lastRes, c.lastErr = c.now(), r, err
+	}
+	return r, err
+}
+
+func (c *Client) token(ctx context.Context) (string, error) {
+	read := c.Credential
+	if read == nil {
+		read = func(ctx context.Context) (string, error) { return keychain.Read(ctx, KeychainService, "") }
+	}
+	raw, err := read(ctx)
+	if err != nil {
+		return "", provider.Stale("Claude: chưa có credential trong Keychain (đăng nhập Claude Code)")
+	}
+	var cr credential
+	if err := json.Unmarshal([]byte(raw), &cr); err != nil {
+		return "", errors.New("Claude: credential không đúng định dạng")
+	}
+	tok := cr.ClaudeAiOauth.AccessToken
+	if tok == "" {
+		return "", provider.Stale("Claude: credential thiếu accessToken")
+	}
+	if exp := cr.ClaudeAiOauth.ExpiresAt; exp > 0 && !c.now().Before(time.UnixMilli(exp)) {
+		return "", provider.Stale("Claude: token hết hạn, mở Claude Code để làm mới")
+	}
+	return tok, nil
+}
+
+func (c *Client) fetch(ctx context.Context) (usageResponse, error) {
+	tok, err := c.token(ctx)
+	if err != nil {
+		return usageResponse{}, err
+	}
+	base := c.BaseURL
+	if base == "" {
+		base = DefaultBaseURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/api/oauth/usage", nil)
+	if err != nil {
+		return usageResponse{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("anthropic-beta", BetaHeader)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	hc := c.HTTP
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return usageResponse{}, fmt.Errorf("Claude: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return usageResponse{}, fmt.Errorf("Claude: %w", err)
+	}
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		// Token rejected: wait for Claude Code to refresh it, never refresh here.
+		return usageResponse{}, provider.Stale("Claude: token bị từ chối (401)")
+	case resp.StatusCode != http.StatusOK:
+		return usageResponse{}, fmt.Errorf("Claude: HTTP %d", resp.StatusCode)
+	}
+	var r usageResponse
+	if err := json.Unmarshal(body, &r); err != nil {
+		return usageResponse{}, fmt.Errorf("Claude: JSON không hợp lệ: %w", err)
+	}
+	return r, nil
+}
+
+// Provider is one row (one window) of the Claude account.
+type Provider struct {
+	Client *Client
+	Window Window
+}
+
+// Rows returns the 5-hour and weekly rows sharing one client.
+func Rows(c *Client) []provider.Provider {
+	return []provider.Provider{&Provider{c, FiveHour}, &Provider{c, SevenDay}}
+}
+
+func (p *Provider) ID() string { return "claude:" + p.Client.Email + ":" + string(p.Window) }
+func (p *Provider) Service() string {
+	if p.Window == FiveHour {
+		return "Claude 5h"
+	}
+	return "Claude tuần"
+}
+func (p *Provider) Account() string { return p.Client.Email }
 
 func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
-	if _, err := keychain.Read(ctx, KeychainService, ""); err != nil {
+	r, err := p.Client.get(ctx)
+	if err != nil {
 		return provider.Usage{}, err
 	}
-	// TODO: parse the JSON credential (accessToken, expiresAt). If expired, return an
-	// error ("token hết hạn") instead of refreshing. Otherwise call the usage endpoint
-	// and map the 5h / weekly windows to Usage{Kind: KindQuota, UsedPercent, ResetAt}.
-	// Verify the account email matches p.Email.
-	return provider.Usage{}, provider.NotImplemented("Claude")
+	w := r.FiveHour
+	if p.Window == SevenDay {
+		w = r.SevenDay
+	}
+	if w == nil || w.Utilization == nil {
+		return provider.Usage{}, fmt.Errorf("Claude: thiếu %s trong phản hồi", p.Window)
+	}
+	u := provider.Usage{Kind: provider.KindQuota, UsedPercent: *w.Utilization}
+	if w.ResetsAt != nil && *w.ResetsAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, *w.ResetsAt)
+		if err != nil {
+			return provider.Usage{}, fmt.Errorf("Claude: resets_at không hợp lệ %q", *w.ResetsAt)
+		}
+		u.ResetAt = t
+	}
+	return u, nil
 }

@@ -47,13 +47,13 @@ go test -race ./...
   thời điểm reset; hoặc số dư kèm loại tiền).
 - `internal/scheduler`: mỗi provider chạy trong goroutine riêng, có timeout
   và recover panic, nên một provider lỗi không ảnh hưởng các provider khác.
-  Trạng thái mỗi dòng: `chưa cập nhật` (chưa lấy được hoặc dữ liệu đã cũ quá
-  3 chu kỳ), `lỗi` (lần gọi gần nhất thất bại). Khi không mới, số liệu cũ
+  Trạng thái mỗi dòng: `chưa cập nhật` (chưa lấy được, dữ liệu đã cũ quá
+  3 chu kỳ, hoặc token thiếu/hết hạn), `lỗi` (lần gọi gần nhất thất bại). Khi không mới, số liệu cũ
   không được hiển thị; chỉ hiện thời điểm cập nhật thành công gần nhất.
 - Dòng dùng trên 80% được in đậm và tô nền.
 - `internal/keychain`: đọc secret từ macOS Keychain (chỉ đọc, qua
   `/usr/bin/security`).
-- `internal/providers`: `mock` (demo), `deepseek`, và các stub `claude`,
+- `internal/providers`: `mock` (demo), `deepseek`, `claude`, và các stub
   `codex`, `grokbuild` (xem TODO trong code).
 
 ## Secret
@@ -77,9 +77,22 @@ App gọi `GET https://api.deepseek.com/user/balance` và hiển thị số dư
 đúng CNY (không quy đổi). Thiếu key, lỗi HTTP hoặc JSON sai đều hiện `lỗi`.
 Lần đầu macOS có thể hỏi quyền cho `security` đọc mục này; chọn "Allow" (chưa nên chọn "Always Allow" cho tới khi nghiệm thu xong).
 
-Claude: app chỉ đọc token mà Claude Code đã lưu (mục
-`Claude Code-credentials`) và không bao giờ refresh token.
+### Claude
+
+Không cần thêm gì: app đọc (chỉ đọc) credential OAuth mà Claude Code đã lưu
+trong Keychain, mục `Claude Code-credentials` (JSON `claudeAiOauth` với
+`accessToken`, `expiresAt`). App **không bao giờ** refresh hay ghi token;
+nếu token thiếu, hết hạn hoặc bị từ chối (401), hai dòng Claude hiện
+`chưa cập nhật` cho tới khi bạn mở Claude Code để nó tự làm mới.
+
+Truyền email để đặt nhãn: `go run ./cmd/ai-limit -claude-email ban@example.com`.
+
+App gọi `GET https://api.anthropic.com/api/oauth/usage` (header
+`anthropic-beta: oauth-2025-04-20`), endpoint không công khai mà lệnh
+`/usage` của Claude Code dùng, và hiện 2 dòng: `Claude 5h` và `Claude tuần`,
+kèm thời điểm reset. Gọi tối đa 1 lần mỗi 5 phút vì endpoint này giới hạn
+tần suất rất chặt (429 sẽ hiện `lỗi`). Endpoint có thể thay đổi bất cứ lúc nào.
 
 ## Trạng thái
 
-Đã có: mock, DeepSeek. Claude, Codex, Grok Build đang là stub và sẽ hiện `lỗi`.
+Đã có: mock, DeepSeek, Claude. Codex, Grok Build đang là stub và sẽ hiện `lỗi`.

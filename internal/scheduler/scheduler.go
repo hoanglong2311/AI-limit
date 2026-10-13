@@ -3,6 +3,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -113,7 +114,10 @@ func (s *Scheduler) RefreshOne(ctx context.Context, p provider.Provider) {
 	s.mu.Lock()
 	st := s.states[p.ID()]
 	st.LastAttempt = now
-	if err != nil {
+	if errors.Is(err, provider.ErrStale) {
+		st.Status = StatusStale
+		st.Err = err.Error()
+	} else if err != nil {
 		st.Status = StatusError
 		st.Err = err.Error()
 	} else {

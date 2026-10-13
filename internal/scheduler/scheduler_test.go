@@ -143,3 +143,17 @@ func TestBalanceNeverHigh(t *testing.T) {
 		t.Fatal("balance should not be high")
 	}
 }
+
+func TestStaleErrorShowsChuaCapNhat(t *testing.T) {
+	f := &fake{id: "a", fn: ok(10)}
+	s := New(Config{}, []provider.Provider{f}, nil)
+	s.RefreshOne(context.Background(), f)
+	f.fn = func(context.Context) (provider.Usage, error) {
+		return provider.Usage{}, provider.Stale("token hết hạn")
+	}
+	s.RefreshOne(context.Background(), f)
+	st := s.Snapshot()[0]
+	if st.Status != StatusStale || st.Fresh() || st.Label() != "chưa cập nhật" || st.LastSuccess.IsZero() {
+		t.Fatalf("got %+v", st)
+	}
+}
