@@ -133,6 +133,9 @@ func Group(states []scheduler.State) []Block {
 	return out
 }
 
+// GrokUsageHint tells where to see Grok numbers when the API fails.
+const GrokUsageHint = "xem bằng lệnh /usage trong Grok Build"
+
 // ServiceKey maps a row's service ("Claude 5h") to its Settings key
 // ("claude"); "" for rows without a toggle (demo mocks).
 func ServiceKey(service string) string {
@@ -228,6 +231,9 @@ func Note(now time.Time, s scheduler.State) string {
 	case scheduler.StatusNoKey:
 		return s.Err
 	case scheduler.StatusError:
+		if ServiceKey(s.Service) == "grok" {
+			return "lỗi lúc " + Clock(now, s.LastAttempt) + " · " + GrokUsageHint
+		}
 		return "lỗi lúc " + Clock(now, s.LastAttempt)
 	}
 	if s.Fresh() && s.Usage.Kind == provider.KindQuota {

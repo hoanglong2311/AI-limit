@@ -50,13 +50,10 @@ func TestInterval(t *testing.T) {
 
 func TestEnabledDefaultsAndSave(t *testing.T) {
 	c := Defaults()
-	for _, k := range []string{Claude, Codex, DeepSeek} {
+	for _, k := range []string{Claude, Codex, DeepSeek, Grok} {
 		if !c.Enabled(k) {
 			t.Errorf("%s should default on", k)
 		}
-	}
-	if c.Enabled(Grok) {
-		t.Error("grok should default off")
 	}
 	d := c.SetEnabled(Codex, false)
 	if c.Services != nil || d.Enabled(Codex) || !d.Enabled(Claude) {
@@ -70,7 +67,7 @@ func TestEnabledDefaultsAndSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Enabled(Codex) || !got.Enabled(DeepSeek) || got.Enabled(Grok) {
+	if got.Enabled(Codex) || !got.Enabled(DeepSeek) || !got.Enabled(Grok) {
 		t.Fatalf("reloaded %+v", got)
 	}
 }

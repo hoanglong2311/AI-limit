@@ -34,13 +34,12 @@ const (
 // ServiceKeys is the order shown in Settings.
 var ServiceKeys = []string{Claude, Codex, DeepSeek, Grok}
 
-// Enabled reports whether a service is on. Grok is off by default (no
-// data source yet); the others are on.
+// Enabled reports whether a service is on; every service defaults to on.
 func (c Config) Enabled(key string) bool {
 	if v, ok := c.Services[key]; ok {
 		return v
 	}
-	return key != Grok
+	return true
 }
 
 // SetEnabled returns a copy with one service toggled (the map is copied).

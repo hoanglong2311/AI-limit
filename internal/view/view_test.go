@@ -106,3 +106,15 @@ func TestSetupBlock(t *testing.T) {
 		t.Fatal(rows[3].Label())
 	}
 }
+
+func TestGrokErrorNoteHasUsageHint(t *testing.T) {
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.Local)
+	s := scheduler.State{Service: "Grok tuần", Status: scheduler.StatusError, LastAttempt: now}
+	if got := Note(now, s); got != "lỗi lúc 12:00 · "+GrokUsageHint || s.Label() != "lỗi" {
+		t.Fatal(got)
+	}
+	s.Service = "Claude 5h"
+	if got := Note(now, s); got != "lỗi lúc 12:00" {
+		t.Fatal(got)
+	}
+}
