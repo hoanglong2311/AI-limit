@@ -40,6 +40,16 @@ func fmtTime(t time.Time) string {
 	return t.Local().Format("15:04 02/01")
 }
 
+func fmtMoney(v float64, cur string) string {
+	switch cur {
+	case "USD", "":
+		return fmt.Sprintf("$%.2f", v)
+	case "CNY":
+		return fmt.Sprintf("¥%.2f CNY", v)
+	}
+	return fmt.Sprintf("%.2f %s", v, cur)
+}
+
 func (a *app) row(c *ui.Context, s scheduler.State) {
 	t := c.Theme()
 	card := ui.Column(c.Key(s.ID)).Gap(4).Padding(8).Radius(8)
@@ -57,7 +67,7 @@ func (a *app) row(c *ui.Context, s scheduler.State) {
 			case !s.Fresh():
 				ui.Text(c, s.Label()).TextColor(t.Danger)
 			case s.Usage.Kind == provider.KindBalance:
-				ui.Text(c, fmt.Sprintf("$%.2f", s.Usage.BalanceUSD)).Bold()
+				ui.Text(c, fmtMoney(s.Usage.Balance, s.Usage.Currency)).Bold()
 			default:
 				pct := ui.Text(c, fmt.Sprintf("%.0f%%", s.Usage.UsedPercent))
 				if s.High() {

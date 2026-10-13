@@ -12,7 +12,7 @@ type Kind int
 const (
 	// KindQuota: UsedPercent and ResetAt are set.
 	KindQuota Kind = iota
-	// KindBalance: BalanceUSD is set.
+	// KindBalance: Balance and Currency are set.
 	KindBalance
 )
 
@@ -21,7 +21,8 @@ type Usage struct {
 	Kind        Kind
 	UsedPercent float64   // 0..100, KindQuota
 	ResetAt     time.Time // zero if unknown, KindQuota
-	BalanceUSD  float64   // KindBalance
+	Balance     float64   // KindBalance, amount in Currency
+	Currency    string    // KindBalance, ISO code such as "USD" or "CNY"
 }
 
 // Provider fetches usage for one account.

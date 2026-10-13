@@ -135,7 +135,7 @@ func TestRunRefreshesPeriodicallyPerProvider(t *testing.T) {
 
 func TestBalanceNeverHigh(t *testing.T) {
 	f := &fake{id: "a", fn: func(context.Context) (provider.Usage, error) {
-		return provider.Usage{Kind: provider.KindBalance, BalanceUSD: 999}, nil
+		return provider.Usage{Kind: provider.KindBalance, Balance: 999}, nil
 	}}
 	s := New(Config{}, []provider.Provider{f}, nil)
 	s.RefreshOne(context.Background(), f)

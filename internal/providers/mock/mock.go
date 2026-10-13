@@ -31,7 +31,7 @@ func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
 		return provider.Usage{}, errors.New("mock: lỗi giả lập")
 	}
 	if p.Balance {
-		return provider.Usage{Kind: provider.KindBalance, BalanceUSD: 5 + rand.Float64()*50}, nil
+		return provider.Usage{Kind: provider.KindBalance, Balance: 5 + rand.Float64()*50, Currency: "USD"}, nil
 	}
 	return provider.Usage{
 		Kind:        provider.KindQuota,
