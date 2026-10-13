@@ -9,12 +9,21 @@ pure Go, không cần cgo.
 
 1. Tải `AI-limit-<phiên bản>-universal.dmg` ở trang Releases (chạy được trên
    cả Apple Silicon và Intel, macOS 12 trở lên).
-2. Mở file dmg, kéo `AI-limit.app` vào thư mục `Applications`.
+2. Mở file dmg: Finder tự mở cửa sổ cài đặt. Kéo biểu tượng `AI-limit`
+   sang biểu tượng `Applications` (theo mũi tên), rồi tháo (eject) ổ
+   `AI-limit` trong Finder.
 3. App chưa được ký bằng Developer ID nên lần đầu macOS sẽ chặn. Mở
    `AI-limit` một lần, bấm Done/OK, rồi vào System Settings > Privacy &
    Security, kéo xuống và bấm "Open Anyway" cho AI-limit, xác nhận bằng mật
    khẩu. Các lần sau mở bình thường.
-4. Biểu tượng xuất hiện trên menu bar (không có trên Dock).
+4. Biểu tượng xuất hiện trên menu bar (không có trên Dock). Bấm vào để xem
+   từng dịch vụ (Claude, Codex, DeepSeek) với thanh 5h và tuần, thời gian
+   còn lại tới lúc reset và một dòng "Cập nhật lúc" ở cuối.
+5. Kiểm tra file tải về (tuỳ chọn): `shasum -a 256 AI-limit-*.dmg`, so với
+   SHA-256 trong ghi chú phát hành.
+
+Nâng cấp: thoát app (Thoát hoặc Cmd+Q), kéo bản mới vào `Applications`
+và chọn Replace.
 
 ## Cấu hình
 
@@ -24,14 +33,16 @@ file với giá trị mặc định:
 
 ```json
 {
-  "claude_email": "you@example.com",
+  "claude_email": "",
   "codex_label": "ChatGPT",
   "interval": "5m",
   "demo": false
 }
 ```
 
-- `claude_email`: email hiển thị cho tài khoản Claude.
+- `claude_email`: để trống thì app tự lấy email thật của tài khoản Claude
+  (từ `~/.claude.json` của Claude Code hoặc API profile); không có email thì
+  ẩn nhãn. Địa chỉ mẫu như `you@example.com` bị bỏ qua.
 - `codex_label`: nhãn hiển thị cho tài khoản Codex.
 - `interval`: chu kỳ làm mới (định dạng Go như `5m`, `10m`; tối thiểu `1m`;
   Claude luôn tối thiểu 5 phút).
@@ -71,11 +82,17 @@ go build -o build/ai-limit ./cmd/ai-limit
 go run github.com/egoist/mygo/cmd/mygo@v0.4.8 build
 ```
 
-Đóng gói `.app` universal và `.dmg` (chạy được trên macOS hoặc Linux):
+Đóng gói `.app` universal và `.dmg` UDZO kéo-thả (chạy được trên macOS hoặc Linux):
 
 ```sh
 ./scripts/package-macos.sh   # -> dist/AI-limit-<version>-universal.dmg
 ```
+
+Trên Linux cần thêm `rcodesign`, `mkfs.hfsplus` (hfsprogs), `hfsplus` và `dmg`
+từ libdmg-hfsplus, và Python có `ds_store` + `mac_alias` (đặt
+`PYTHON=/đường/dẫn/python` nếu dùng venv). Chi tiết: `docs/dmg-plan.md`.
+Ảnh nền cửa sổ dmg: `scripts/dmg/background.png` (tạo bằng
+`go run ./scripts/dmg/background`).
 
 Có thể cross-compile từ Linux: `GOOS=darwin GOARCH=arm64 go build ./cmd/ai-limit`.
 
@@ -155,5 +172,6 @@ Nhãn tài khoản: `-codex-label ten-cua-ban`.
 
 ## Trạng thái
 
-v0.1.0: DeepSeek, Claude, Codex (và mock). Grok Build dự kiến ở v0.2.0;
-hiện là stub và sẽ hiện `lỗi`.
+v0.1.1: giao diện theo khối dịch vụ, đếm ngược reset, màu thanh
+xanh/vàng/đỏ, email Claude thật, DeepSeek báo "chưa có key", dmg kéo-thả.
+Grok Build dự kiến ở v0.2.0 (chưa hiện trong menu).
