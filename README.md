@@ -147,11 +147,13 @@ Secret chỉ lưu trong Keychain, không bao giờ trong repo.
 
 Lấy API key tại https://platform.deepseek.com/api_keys, mở **Cài đặt**
 (nút cạnh **Thoát**), dán vào ô API key (ô nhập bị che) rồi bấm **Lưu vào
-Keychain**. App ghi thẳng vào macOS Keychain (mục `ai-limit.deepseek`)
+Keychain**. App ghi thẳng vào macOS Keychain (mục `ai-limit.deepseek`,
+account `default`; app chỉ đọc đúng account này)
 bằng API gốc Security.framework (`SecItemAdd`/`SecItemUpdate`, gọi qua
 purego, không cgo); key không bao giờ đi qua dòng lệnh, log hay thông báo
 lỗi. Nút **Kiểm tra** gọi API số dư và chỉ báo `Key hợp lệ` hoặc
-`Key sai/không dùng được`.
+`Key sai/không dùng được` (chỉ khi API trả 401/403); lỗi mạng, 5xx hay lỗi
+khác hiện `Không kiểm tra được, thử lại sau`.
 
 App gọi `GET https://api.deepseek.com/user/balance` và hiển thị số dư
 (`total_balance`) theo USD nếu có; nếu tài khoản chỉ có CNY thì hiển thị

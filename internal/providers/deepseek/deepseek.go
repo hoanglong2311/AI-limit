@@ -24,6 +24,9 @@ const DefaultBaseURL = "https://api.deepseek.com"
 // AddKeyHint is the one-line instruction shown when the key is missing.
 const AddKeyHint = "Chưa có API key DeepSeek: nhập key trong Cài đặt"
 
+// keychainGet reads the item; a variable so tests can check the lookup.
+var keychainGet = keychain.Get
+
 // KeychainAccount is the account of the Keychain item.
 const KeychainAccount = "default"
 
@@ -52,7 +55,7 @@ func (p *Provider) key(ctx context.Context) (string, error) {
 	if p.Key != nil {
 		return p.Key(ctx)
 	}
-	return keychain.Get(KeychainService, "")
+	return keychainGet(KeychainService, KeychainAccount)
 }
 
 func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
@@ -87,7 +90,7 @@ func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
 		return provider.Usage{}, fmt.Errorf("deepseek: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return provider.Usage{}, fmt.Errorf("deepseek: HTTP %d", resp.StatusCode)
+		return provider.Usage{}, &HTTPError{Status: resp.StatusCode}
 	}
 	return parse(body)
 }
@@ -130,14 +133,32 @@ func SaveKey(key string) error {
 
 // Check result texts shown in Settings; they never include the key.
 const (
-	CheckOK  = "Key hợp lệ"
-	CheckBad = "Key sai/không dùng được"
+	CheckOK    = "Key hợp lệ"
+	CheckBad   = "Key sai/không dùng được"
+	CheckRetry = "Không kiểm tra được, thử lại sau"
 )
 
-// CheckText maps the result of a balance call to the Settings text.
+// HTTPError is a non-200 response from the API. It holds only the status
+// code, never the key or the request.
+type HTTPError struct{ Status int }
+
+func (e *HTTPError) Error() string { return fmt.Sprintf("deepseek: HTTP %d", e.Status) }
+
+// Rejected reports whether the server refused the key (401 or 403).
+func (e *HTTPError) Rejected() bool {
+	return e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden
+}
+
+// CheckText maps the result of a balance call to the Settings text: only
+// 401/403 mean the key is bad; network errors, 5xx and anything else
+// mean the check could not be done.
 func CheckText(err error) string {
 	if err == nil {
 		return CheckOK
 	}
-	return CheckBad
+	var he *HTTPError
+	if errors.As(err, &he) && he.Rejected() {
+		return CheckBad
+	}
+	return CheckRetry
 }

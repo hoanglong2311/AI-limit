@@ -108,3 +108,54 @@ func TestCheckTextNeverEchoesKey(t *testing.T) {
 		t.Fatal("ok text")
 	}
 }
+
+func TestCheckTextByStatus(t *testing.T) {
+	const key = "sk-secret-456"
+	cases := map[int]string{401: CheckBad, 403: CheckBad, 500: CheckRetry, 502: CheckRetry, 429: CheckRetry, 404: CheckRetry}
+	for code, want := range cases {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(code) }))
+		p := &Provider{BaseURL: srv.URL, Key: func(context.Context) (string, error) { return key, nil }}
+		_, err := p.Fetch(context.Background())
+		srv.Close()
+		var he *HTTPError
+		if !errors.As(err, &he) || he.Status != code || strings.Contains(err.Error(), key) {
+			t.Fatalf("%d: %v", code, err)
+		}
+		if got := CheckText(err); got != want {
+			t.Errorf("%d: %q want %q", code, got, want)
+		}
+	}
+}
+
+func TestCheckTextNetworkError(t *testing.T) {
+	const key = "sk-secret-789"
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close() // connection refused
+	p := &Provider{BaseURL: url, Key: func(context.Context) (string, error) { return key, nil }}
+	_, err := p.Fetch(context.Background())
+	if err == nil || strings.Contains(err.Error(), key) {
+		t.Fatalf("err %v", err)
+	}
+	if got := CheckText(err); got != CheckRetry {
+		t.Fatal(got)
+	}
+	if got := CheckText(errors.New("deepseek: JSON không hợp lệ")); got != CheckRetry {
+		t.Fatal(got)
+	}
+}
+
+func TestKeychainAccountMatchesSave(t *testing.T) {
+	// SaveKey writes (KeychainService, KeychainAccount) and key() must read
+	// exactly that item, not any account of the service.
+	var gotSvc, gotAcct string
+	old := keychainGet
+	keychainGet = func(svc, acct string) (string, error) { gotSvc, gotAcct = svc, acct; return "k", nil }
+	defer func() { keychainGet = old }()
+	if _, err := (&Provider{}).key(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if gotSvc != KeychainService || gotAcct != "default" {
+		t.Fatalf("lookup %q %q", gotSvc, gotAcct)
+	}
+}

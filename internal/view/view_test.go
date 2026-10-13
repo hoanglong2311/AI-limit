@@ -54,3 +54,55 @@ func TestUpdateLabel(t *testing.T) {
 		t.Fatal(UpdateLabel("v0.1.4"))
 	}
 }
+
+func TestFilterEnabled(t *testing.T) {
+	rows := []scheduler.State{
+		{ID: "a", Service: "Claude 5h"}, {ID: "b", Service: "Claude tuần"},
+		{ID: "c", Service: "Codex 5h"}, {ID: "d", Service: "DeepSeek"},
+		{ID: "e", Service: "Grok"}, {ID: "f", Service: "Mock"},
+	}
+	on := map[string]bool{"claude": false, "codex": true, "deepseek": true, "grok": false}
+	got := FilterEnabled(rows, func(k string) bool { return on[k] })
+	var ids string
+	for _, s := range got {
+		ids += s.ID
+	}
+	if ids != "cdf" {
+		t.Fatalf("got %q", ids)
+	}
+	if n := len(FilterEnabled(rows, func(string) bool { return false })); n != 1 {
+		t.Fatalf("all off keeps only mock, got %d", n)
+	}
+}
+
+func TestCooldownText(t *testing.T) {
+	cases := map[time.Duration]string{
+		0:                           "",
+		-time.Second:                "",
+		time.Second:                 "làm mới được sau 1 phút",
+		3 * time.Minute:             "làm mới được sau 3 phút",
+		3*time.Minute + time.Second: "làm mới được sau 4 phút",
+		5 * time.Minute:             "làm mới được sau 5 phút",
+	}
+	for d, want := range cases {
+		if got := CooldownText(d); got != want {
+			t.Errorf("%v: %q want %q", d, got, want)
+		}
+	}
+}
+
+func TestSetupBlock(t *testing.T) {
+	rows := []scheduler.State{
+		{ID: "1", Service: "Claude 5h", Status: scheduler.StatusNoKey, Err: "hint"},
+		{ID: "2", Service: "Claude tuần", Status: scheduler.StatusNoKey, Err: "hint"},
+		{ID: "3", Service: "Codex 5h", Status: scheduler.StatusNoKey, Err: "x"},
+		{ID: "4", Service: "Codex tuần", Status: scheduler.StatusReset},
+	}
+	b := Group(rows)
+	if b[0].Setup != "hint" || b[1].Setup != "" {
+		t.Fatalf("%+v", b)
+	}
+	if rows[3].Label() != "đã reset, chưa dùng" {
+		t.Fatal(rows[3].Label())
+	}
+}

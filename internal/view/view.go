@@ -78,6 +78,10 @@ type Block struct {
 	Title   string // "Claude"
 	Account string // email or label; "" to hide
 	Lines   []Line
+	// Setup is the one-line instruction when the service is not
+	// configured (every line has StatusNoKey); the block then shows it
+	// with a button that opens Settings instead of its lines.
+	Setup string
 }
 
 var windowSuffix = []string{"5h", "tuần"}
@@ -116,7 +120,55 @@ func Group(states []scheduler.State) []Block {
 		}
 		b.Lines = append(b.Lines, Line{Label: win, State: s})
 	}
+	for i := range out {
+		b := &out[i]
+		setup := len(b.Lines) > 0
+		for _, l := range b.Lines {
+			setup = setup && l.State.Status == scheduler.StatusNoKey
+		}
+		if setup {
+			b.Setup = b.Lines[0].State.Err
+		}
+	}
 	return out
+}
+
+// ServiceKey maps a row's service ("Claude 5h") to its Settings key
+// ("claude"); "" for rows without a toggle (demo mocks).
+func ServiceKey(service string) string {
+	title, _ := split(service)
+	switch title {
+	case "Claude":
+		return "claude"
+	case "Codex":
+		return "codex"
+	case "DeepSeek":
+		return "deepseek"
+	case "Grok":
+		return "grok"
+	}
+	return ""
+}
+
+// FilterEnabled drops the rows of services turned off in Settings.
+func FilterEnabled(states []scheduler.State, enabled func(key string) bool) []scheduler.State {
+	out := make([]scheduler.State, 0, len(states))
+	for _, s := range states {
+		if k := ServiceKey(s.Service); k == "" || enabled(k) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// CooldownText tells when a manual refresh may call Claude again, in
+// whole minutes rounded up: "làm mới được sau 3 phút". "" when allowed.
+func CooldownText(left time.Duration) string {
+	if left <= 0 {
+		return ""
+	}
+	m := int((left + time.Minute - 1) / time.Minute)
+	return fmt.Sprintf("làm mới được sau %d phút", m)
 }
 
 // Countdown formats the time left until t, e.g. "còn 2 giờ 6 phút".
