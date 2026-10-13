@@ -229,6 +229,10 @@ còn lại đến hết kỳ, giống Claude.
   `Accept`; timeout 15 giây, không theo redirect.
 - Tối thiểu 5 phút giữa hai lần gọi, kể cả khi bấm **Làm mới**
   (`làm mới được sau X phút`).
+- Server bỏ các giá trị 0/false khỏi phản hồi: có `currentPeriod.end` mà
+  thiếu `creditUsagePercent` thì hiện 0%. Thiếu `config`, hoặc thiếu % mà
+  không có `currentPeriod.end`, là lỗi. Có % mà thiếu `currentPeriod.end`
+  thì vẫn hiện %, chỉ bỏ dòng thời gian.
 - Lỗi khác hoặc phản hồi sai dạng: `lỗi` kèm gợi ý
   `xem bằng lệnh /usage trong Grok Build`; không đoán số.
 - Chưa có `auth.json`: hướng dẫn cài Grok Build và chạy `grok login`, kèm

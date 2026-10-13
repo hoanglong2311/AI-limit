@@ -221,13 +221,25 @@ func parse(body []byte) (provider.Usage, error) {
 	}
 	u := provider.Usage{Kind: provider.KindQuota}
 	if b.Config == nil {
-		return u, nil
+		return provider.Usage{}, errors.New("Grok Build: phản hồi thiếu config")
 	}
-	if p := b.Config.CreditUsagePercent; p != nil {
+	p := b.Config.CreditUsagePercent
+	cp := b.Config.CurrentPeriod
+	hasEnd := cp != nil && cp.End != ""
+	switch {
+	case p != nil:
 		if *p < 0 || *p > 100 {
 			return provider.Usage{}, fmt.Errorf("Grok Build: creditUsagePercent ngoài 0..100 (%g)", *p)
 		}
 		u.UsedPercent = *p
+	case hasEnd:
+		// The server omits zero values and false from this response
+		// (grok-build crates/codegen/xai-grok-shell/src/extensions/billing.rs:22),
+		// so a valid period without creditUsagePercent means 0%.
+		u.UsedPercent = 0
+	default:
+		// No percent and no period end: not enough to say anything.
+		return provider.Usage{}, errors.New("Grok Build: phản hồi thiếu creditUsagePercent")
 	}
 	if cp := b.Config.CurrentPeriod; cp != nil && cp.End != "" {
 		t, err := time.Parse(time.RFC3339Nano, cp.End)

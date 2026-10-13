@@ -118,3 +118,18 @@ func TestGrokErrorNoteHasUsageHint(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestGrokNeverBalanceLabel(t *testing.T) {
+	rows := []scheduler.State{
+		{ID: "g", Service: "Grok tuần", Status: scheduler.StatusError},
+		{ID: "g2", Service: "Grok", Status: scheduler.StatusPending},
+		{ID: "d", Service: "DeepSeek", Status: scheduler.StatusNoKey},
+	}
+	b := Group(rows)
+	if b[0].Lines[0].Label != "tuần" || b[0].Lines[1].Label != "tuần" {
+		t.Fatalf("grok labels %+v", b[0].Lines)
+	}
+	if b[1].Lines[0].Label != "Số dư" {
+		t.Fatal(b[1].Lines[0].Label)
+	}
+}

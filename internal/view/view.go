@@ -113,10 +113,7 @@ func Group(states []scheduler.State) []Block {
 			b.Account = s.Account
 		}
 		if win == "" {
-			win = "Số dư"
-			if s.HasUsage && s.Usage.Kind == provider.KindQuota {
-				win = "Dùng"
-			}
+			win = lineLabel(s)
 		}
 		b.Lines = append(b.Lines, Line{Label: win, State: s})
 	}
@@ -135,6 +132,20 @@ func Group(states []scheduler.State) []Block {
 
 // GrokUsageHint tells where to see Grok numbers when the API fails.
 const GrokUsageHint = "xem bằng lệnh /usage trong Grok Build"
+
+// lineLabel names a row without a window suffix. "Số dư" is only for
+// balance services (DeepSeek); Grok is a subscription and always "tuần".
+func lineLabel(s scheduler.State) string {
+	switch {
+	case ServiceKey(s.Service) == "grok":
+		return "tuần"
+	case s.HasUsage && s.Usage.Kind == provider.KindQuota:
+		return "Dùng"
+	case s.HasUsage && s.Usage.Kind == provider.KindBalance, ServiceKey(s.Service) == "deepseek":
+		return "Số dư"
+	}
+	return "Dùng"
+}
 
 // ServiceKey maps a row's service ("Claude 5h") to its Settings key
 // ("claude"); "" for rows without a toggle (demo mocks).

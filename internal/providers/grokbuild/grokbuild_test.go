@@ -88,11 +88,29 @@ func TestParseAndHeaders(t *testing.T) {
 }
 
 func TestParseMissingFields(t *testing.T) {
-	for _, body := range []string{`{}`, `{"config":{}}`, `{"config":{"currentPeriod":{}}}`} {
-		u, err := parse([]byte(body))
-		if err != nil || u.UsedPercent != 0 || !u.ResetAt.IsZero() {
-			t.Fatalf("%s: %+v %v", body, u, err)
+	// (b) no config, or neither percent nor period; (d) period without end.
+	for _, body := range []string{`{}`, `{"config":null}`, `{"config":{}}`,
+		`{"config":{"currentPeriod":{}}}`, `{"config":{"currentPeriod":{"start":"2026-10-09T16:00:00Z"}}}`} {
+		if _, err := parse([]byte(body)); err == nil {
+			t.Fatalf("%s: want error", body)
 		}
+	}
+	// (a) period end without percent: server omitted zero -> 0%.
+	u, err := parse([]byte(`{"config":{"currentPeriod":{"end":"2026-10-16T16:00:00Z"}}}`))
+	if err != nil || u.UsedPercent != 0 || !u.ResetAt.Equal(time.Date(2026, 10, 16, 16, 0, 0, 0, time.UTC)) {
+		t.Fatalf("(a): %+v %v", u, err)
+	}
+	// (c) percent without end: shown, no reset time.
+	for _, body := range []string{`{"config":{"creditUsagePercent":12}}`, `{"config":{"creditUsagePercent":12,"currentPeriod":{}}}`} {
+		u, err := parse([]byte(body))
+		if err != nil || u.UsedPercent != 12 || !u.ResetAt.IsZero() {
+			t.Fatalf("(c) %s: %+v %v", body, u, err)
+		}
+	}
+	// Full.
+	u, err = parse([]byte(`{"config":{"creditUsagePercent":61,"currentPeriod":{"end":"2026-10-16T16:00:00Z"}}}`))
+	if err != nil || u.UsedPercent != 61 || !u.ResetAt.Equal(time.Date(2026, 10, 16, 16, 0, 0, 0, time.UTC)) {
+		t.Fatalf("full: %+v %v", u, err)
 	}
 	for _, body := range []string{`nope`, `{"config":{"creditUsagePercent":"x"}}`, `{"config":{"creditUsagePercent":150}}`,
 		`{"config":{"currentPeriod":{"end":"bad"}}}`} {
@@ -151,7 +169,7 @@ func TestExpiredNoCall(t *testing.T) {
 		"no expiry 30d": `{"s":{"key":"` + secretKey + `","user_id":"u","create_time":"2026-09-01T00:00:00Z","auth_mode":"web_login"}}`,
 	}
 	for name, body := range cases {
-		s, c := setup(t, 200, `{}`)
+		s, c := setup(t, 200, `{"config":{"creditUsagePercent":5}}`)
 		c.AuthPath = authFile(t, body)
 		_, err := (&Provider{c}).Fetch(context.Background())
 		if s.calls.Load() != 0 || !errors.Is(err, provider.ErrNoKey) || err.Error() != ReloginHint {
@@ -160,7 +178,7 @@ func TestExpiredNoCall(t *testing.T) {
 		noSecret(t, err)
 	}
 	// No expiry but recent create_time is still valid.
-	s, c := setup(t, 200, `{}`)
+	s, c := setup(t, 200, `{"config":{"creditUsagePercent":5}}`)
 	c.AuthPath = authFile(t, `{"s":{"key":"k","user_id":"u","create_time":"2026-10-10T00:00:00Z","auth_mode":"web_login"}}`)
 	if _, err := c.get(context.Background()); err != nil || s.calls.Load() != 1 {
 		t.Fatal(err)
@@ -168,7 +186,7 @@ func TestExpiredNoCall(t *testing.T) {
 }
 
 func TestNoAuthFile(t *testing.T) {
-	s, c := setup(t, 200, `{}`)
+	s, c := setup(t, 200, `{"config":{"creditUsagePercent":5}}`)
 	c.AuthPath = filepath.Join(t.TempDir(), "missing.json")
 	_, err := c.get(context.Background())
 	if !errors.Is(err, provider.ErrNoKey) || err.Error() != SetupHint || s.calls.Load() != 0 {
@@ -223,5 +241,20 @@ func TestResetPassed(t *testing.T) {
 	_, err := (&Provider{c}).Fetch(context.Background())
 	if !errors.Is(err, provider.ErrReset) {
 		t.Fatal(err)
+	}
+}
+
+func TestMissingFieldsShowError(t *testing.T) {
+	for _, body := range []string{`{}`, `{"config":{}}`, `{"config":{"currentPeriod":{}}}`} {
+		_, c := setup(t, 200, body)
+		_, err := (&Provider{c}).Fetch(context.Background())
+		if err == nil || errors.Is(err, provider.ErrNoKey) || errors.Is(err, provider.ErrStale) {
+			t.Fatalf("%s: want plain error (lỗi), got %v", body, err)
+		}
+	}
+	_, c := setup(t, 200, `{"config":{"creditUsagePercent":33}}`)
+	u, err := (&Provider{c}).Fetch(context.Background())
+	if err != nil || u.UsedPercent != 33 || !u.ResetAt.IsZero() {
+		t.Fatalf("%+v %v", u, err)
 	}
 }
