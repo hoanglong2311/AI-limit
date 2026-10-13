@@ -5,12 +5,50 @@
 [MyGo](https://github.com/egoist/mygo) v0.4.8, dùng UI native (không webview),
 pure Go, không cần cgo.
 
-## Yêu cầu
+## Cài đặt (bản phát hành)
+
+1. Tải `AI-limit-<phiên bản>-universal.dmg` ở trang Releases (chạy được trên
+   cả Apple Silicon và Intel, macOS 12 trở lên).
+2. Mở file dmg, kéo `AI-limit.app` vào thư mục `Applications`.
+3. App chưa được ký bằng Developer ID nên lần đầu macOS sẽ chặn. Mở
+   `AI-limit` một lần, bấm Done/OK, rồi vào System Settings > Privacy &
+   Security, kéo xuống và bấm "Open Anyway" cho AI-limit, xác nhận bằng mật
+   khẩu. Các lần sau mở bình thường.
+4. Biểu tượng xuất hiện trên menu bar (không có trên Dock).
+
+## Cấu hình
+
+Khi mở từ Finder không có tham số dòng lệnh, nên app đọc file
+`~/Library/Application Support/AI-limit/config.json`. Nếu chưa có, app tạo
+file với giá trị mặc định:
+
+```json
+{
+  "claude_email": "you@example.com",
+  "codex_label": "ChatGPT",
+  "interval": "5m",
+  "demo": false
+}
+```
+
+- `claude_email`: email hiển thị cho tài khoản Claude.
+- `codex_label`: nhãn hiển thị cho tài khoản Codex.
+- `interval`: chu kỳ làm mới (định dạng Go như `5m`, `10m`; tối thiểu `1m`;
+  Claude luôn tối thiểu 5 phút).
+- `demo`: `true` để hiện thêm các dòng mock.
+
+Sửa file rồi thoát app (nút Thoát hoặc Cmd+Q) và mở lại. File này không chứa
+secret. Tham số dòng lệnh (`-claude-email`, `-codex-label`, `-interval`,
+`-demo`) vẫn ghi đè giá trị trong file.
+
+## Phát triển
+
+### Yêu cầu
 
 - macOS
 - Go 1.27.2 trở lên (`brew install go` hoặc tải từ https://go.dev/dl/)
 
-## Chạy
+### Chạy
 
 ```sh
 go run ./cmd/ai-limit
@@ -23,9 +61,9 @@ Tham số:
 
 - `-interval 5m`: chu kỳ làm mới mặc định cho mỗi provider
 - `-claude-email you@example.com`: email hiển thị cho tài khoản Claude
-- `-demo=false`: ẩn các provider mock
+- `-demo=true`: hiện các provider mock (mặc định tắt)
 
-## Build
+### Build
 
 ```sh
 go build -o build/ai-limit ./cmd/ai-limit
@@ -33,9 +71,15 @@ go build -o build/ai-limit ./cmd/ai-limit
 go run github.com/egoist/mygo/cmd/mygo@v0.4.8 build
 ```
 
+Đóng gói `.app` universal và `.dmg` (chạy được trên macOS hoặc Linux):
+
+```sh
+./scripts/package-macos.sh   # -> dist/AI-limit-<version>-universal.dmg
+```
+
 Có thể cross-compile từ Linux: `GOOS=darwin GOARCH=arm64 go build ./cmd/ai-limit`.
 
-## Kiểm thử
+### Kiểm thử
 
 ```sh
 go test -race ./...
@@ -79,7 +123,7 @@ Lần đầu macOS có thể hỏi quyền cho `security` đọc mục này; ch�
 
 ### Claude
 
-Không cần thêm gì: app đọc (chỉ đọc) credential OAuth mà Claude Code đã lưu
+Cần đăng nhập Claude Code trên máy này. App đọc (chỉ đọc) credential OAuth mà Claude Code đã lưu
 trong Keychain, mục `Claude Code-credentials` (JSON `claudeAiOauth` với
 `accessToken`, `expiresAt`). App **không bao giờ** refresh hay ghi token;
 nếu token thiếu, hết hạn hoặc bị từ chối (401), hai dòng Claude hiện
@@ -111,4 +155,5 @@ Nhãn tài khoản: `-codex-label ten-cua-ban`.
 
 ## Trạng thái
 
-Đã có: mock, DeepSeek, Claude, Codex. Grok Build đang là stub và sẽ hiện `lỗi`.
+v0.1.0: DeepSeek, Claude, Codex (và mock). Grok Build dự kiến ở v0.2.0;
+hiện là stub và sẽ hiện `lỗi`.

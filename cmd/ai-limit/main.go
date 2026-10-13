@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/hoanglong2311/AI-limit/internal/config"
 	"github.com/hoanglong2311/AI-limit/internal/provider"
 	"github.com/hoanglong2311/AI-limit/internal/providers/claude"
 	"github.com/hoanglong2311/AI-limit/internal/providers/codex"
@@ -168,10 +169,21 @@ func perProvider(ps []provider.Provider, def time.Duration) map[string]time.Dura
 }
 
 func main() {
-	interval := flag.Duration("interval", 5*time.Minute, "chu kỳ làm mới mặc định")
-	claudeEmail := flag.String("claude-email", "you@example.com", "email tài khoản Claude")
-	codexLabel := flag.String("codex-label", "ChatGPT", "nhãn tài khoản Codex")
-	demo := flag.Bool("demo", true, "hiện các provider mock")
+	cfgPath, err := config.DefaultPath()
+	if err != nil {
+		log.Print("config: ", err)
+	}
+	cfg := config.Defaults()
+	if cfgPath != "" {
+		if cfg, err = config.Load(cfgPath); err != nil {
+			log.Print(err)
+		}
+	}
+	// Flags override the config file; launched from Finder there are none.
+	interval := flag.Duration("interval", cfg.IntervalDuration(), "chu kỳ làm mới mặc định")
+	claudeEmail := flag.String("claude-email", cfg.ClaudeEmail, "email tài khoản Claude")
+	codexLabel := flag.String("codex-label", cfg.CodexLabel, "nhãn tài khoản Codex")
+	demo := flag.Bool("demo", cfg.Demo, "hiện các provider mock")
 	flag.Parse()
 
 	var ps []provider.Provider
