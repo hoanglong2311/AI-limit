@@ -1,0 +1,6 @@
+{
+  "name": "AI Limit",
+  "identifier": "com.hoanglong2311.ai-limit",
+  "out": "build",
+  "macos": { "infoPlist": { "LSUIElement": true } }
+}

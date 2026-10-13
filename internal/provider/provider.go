@@ -1,0 +1,45 @@
+// Package provider defines the interface every usage source implements.
+package provider
+
+import (
+	"context"
+	"time"
+)
+
+// Kind tells which fields of Usage are meaningful.
+type Kind int
+
+const (
+	// KindQuota: UsedPercent and ResetAt are set.
+	KindQuota Kind = iota
+	// KindBalance: BalanceUSD is set.
+	KindBalance
+)
+
+// Usage is one snapshot from a provider.
+type Usage struct {
+	Kind        Kind
+	UsedPercent float64   // 0..100, KindQuota
+	ResetAt     time.Time // zero if unknown, KindQuota
+	BalanceUSD  float64   // KindBalance
+}
+
+// Provider fetches usage for one account.
+type Provider interface {
+	// ID is unique and stable, e.g. "claude:me@example.com".
+	ID() string
+	// Service is the display name, e.g. "Claude".
+	Service() string
+	// Account is the display label, e.g. an email.
+	Account() string
+	// Fetch must honor ctx cancellation. It may be called from any goroutine.
+	Fetch(ctx context.Context) (Usage, error)
+}
+
+// ErrNotImplemented is returned by stub providers.
+type notImpl struct{ name string }
+
+func (e notImpl) Error() string { return e.name + ": chưa triển khai" }
+
+// NotImplemented returns an error for a stub provider.
+func NotImplemented(name string) error { return notImpl{name} }

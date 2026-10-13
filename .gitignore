@@ -1,0 +1,12 @@
+/build/
+/dist/
+/ai-limit
+*.app
+*.dmg
+*.test
+*.out
+.DS_Store
+.env
+*.pem
+*.key
+secrets*
