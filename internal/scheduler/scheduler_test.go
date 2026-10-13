@@ -157,3 +157,13 @@ func TestStaleErrorShowsChuaCapNhat(t *testing.T) {
 		t.Fatalf("got %+v", st)
 	}
 }
+
+func TestNoKeyStatus(t *testing.T) {
+	p := &fake{id: "k", fn: func(context.Context) (provider.Usage, error) { return provider.Usage{}, provider.NoKey("thêm key") }}
+	s := New(Config{}, []provider.Provider{p}, nil)
+	s.RefreshOne(context.Background(), p)
+	st := s.Snapshot()[0]
+	if st.Status != StatusNoKey || st.Label() != "chưa có key" || st.Err != "thêm key" {
+		t.Fatalf("%+v", st)
+	}
+}

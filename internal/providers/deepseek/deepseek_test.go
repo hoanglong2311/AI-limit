@@ -80,8 +80,8 @@ func TestNoKey(t *testing.T) {
 		func(context.Context) (string, error) { return "  ", nil },
 	} {
 		p := &Provider{BaseURL: s.URL, Key: k}
-		if _, err := p.Fetch(context.Background()); err == nil {
-			t.Fatal("want error")
+		if _, err := p.Fetch(context.Background()); !errors.Is(err, provider.ErrNoKey) || err.Error() != AddKeyHint {
+			t.Fatalf("want ErrNoKey, got %v", err)
 		}
 	}
 	if called {

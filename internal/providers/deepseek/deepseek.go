@@ -21,6 +21,9 @@ const KeychainService = "ai-limit.deepseek"
 // DefaultBaseURL is the official API.
 const DefaultBaseURL = "https://api.deepseek.com"
 
+// AddKeyHint is the one-line instruction shown when the key is missing.
+const AddKeyHint = "Thêm key: security add-generic-password -s ai-limit.deepseek -a default -w <API_KEY>"
+
 // Provider calls GET /user/balance. The key is read from Keychain on every
 // fetch and is never written anywhere.
 type Provider struct {
@@ -51,11 +54,11 @@ func (p *Provider) key(ctx context.Context) (string, error) {
 
 func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
 	key, err := p.key(ctx)
-	if err != nil {
-		return provider.Usage{}, err
-	}
-	if strings.TrimSpace(key) == "" {
-		return provider.Usage{}, errors.New("deepseek: API key rỗng")
+	if err != nil || strings.TrimSpace(key) == "" {
+		if ctx.Err() != nil {
+			return provider.Usage{}, ctx.Err()
+		}
+		return provider.Usage{}, provider.NoKey(AddKeyHint)
 	}
 	base := p.BaseURL
 	if base == "" {

@@ -47,6 +47,19 @@ var ErrStale = errors.New("chưa cập nhật")
 // Stale wraps a reason as an ErrStale error.
 func Stale(reason string) error { return fmt.Errorf("%s: %w", reason, ErrStale) }
 
+// ErrNoKey marks a provider whose API key is not configured. The row
+// shows "chưa có key" and the error text (one line of instructions) as a
+// hint, distinct from "lỗi".
+var ErrNoKey = errors.New("chưa có key")
+
+// NoKey wraps a one-line instruction as an ErrNoKey error.
+func NoKey(hint string) error { return noKey{hint} }
+
+type noKey struct{ hint string }
+
+func (e noKey) Error() string        { return e.hint }
+func (e noKey) Is(target error) bool { return target == ErrNoKey }
+
 // notImpl is returned by stub providers.
 type notImpl struct{ name string }
 

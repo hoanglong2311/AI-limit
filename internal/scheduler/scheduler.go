@@ -19,6 +19,7 @@ const (
 	StatusOK                    // last fetch succeeded and is fresh
 	StatusError                 // last fetch failed
 	StatusStale                 // last success is older than StaleAfter
+	StatusNoKey                 // API key not configured; Err holds instructions
 )
 
 // HighThreshold is the used % above which a row is highlighted.
@@ -48,6 +49,8 @@ func (s State) Label() string {
 	switch s.Status {
 	case StatusError:
 		return "lỗi"
+	case StatusNoKey:
+		return "chưa có key"
 	case StatusPending, StatusStale:
 		return "chưa cập nhật"
 	}
@@ -115,7 +118,10 @@ func (s *Scheduler) RefreshOne(ctx context.Context, p provider.Provider) {
 	st := s.states[p.ID()]
 	st.LastAttempt = now
 	st.Account = p.Account() // may be detected only after a fetch
-	if errors.Is(err, provider.ErrStale) {
+	if errors.Is(err, provider.ErrNoKey) {
+		st.Status = StatusNoKey
+		st.Err = err.Error()
+	} else if errors.Is(err, provider.ErrStale) {
 		st.Status = StatusStale
 		st.Err = err.Error()
 	} else if err != nil {
