@@ -23,6 +23,7 @@ import (
 	"github.com/hoanglong2311/AI-limit/internal/providers/grokbuild"
 	"github.com/hoanglong2311/AI-limit/internal/providers/mock"
 	"github.com/hoanglong2311/AI-limit/internal/scheduler"
+	"github.com/hoanglong2311/AI-limit/internal/update"
 	"github.com/hoanglong2311/AI-limit/internal/view"
 )
 
@@ -199,7 +200,8 @@ func (a *app) ready() {
 	ctx, cancel := context.WithCancel(context.Background())
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { cancel(); a.tray.Destroy() })
 	go a.sched.Run(ctx)
-	go a.checkLoop(ctx)
+	a.upd.poller = update.NewPoller(a.checkOnce)
+	go a.upd.poller.Run(ctx)
 }
 
 func trayIcon() []byte {

@@ -21,26 +21,21 @@ type updater struct {
 	checker update.Checker
 	rel     *update.Release // newer release, nil if none
 	busy    bool
+	poller  *update.Poller // startup, every 3 hours, and on Làm mới
 	err     string
 }
 
-// checkLoop checks at startup and then once a day; failures are quiet.
-func (a *app) checkLoop(ctx context.Context) {
-	for {
-		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		r, newer, err := a.upd.checker.Latest(cctx, update.Current)
-		cancel()
-		switch {
-		case err != nil && !errors.Is(err, update.ErrQuiet):
-			log.Print("update: ", err)
-		case err == nil && newer:
-			a.win.Update(func() { a.upd.rel = &r })
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(24 * time.Hour):
-		}
+// checkOnce asks GitHub for a newer release; offline and rate-limit
+// failures (update.ErrQuiet) stay quiet.
+func (a *app) checkOnce(ctx context.Context) {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	r, newer, err := a.upd.checker.Latest(cctx, update.Current)
+	cancel()
+	switch {
+	case err != nil && !errors.Is(err, update.ErrQuiet):
+		log.Print("update: ", err)
+	case err == nil && newer:
+		a.win.Update(func() { a.upd.rel = &r })
 	}
 }
 

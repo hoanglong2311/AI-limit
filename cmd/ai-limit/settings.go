@@ -141,6 +141,9 @@ func (a *app) refreshNow() {
 		ps = append(ps, p)
 	}
 	a.refreshing = true
+	if a.upd.poller != nil {
+		a.upd.poller.Trigger()
+	}
 	go func() {
 		a.sched.RefreshAll(context.Background(), ps)
 		snap := a.sched.Snapshot()
