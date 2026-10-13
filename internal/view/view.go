@@ -40,6 +40,13 @@ const (
 	RedAbove   = 80.0
 )
 
+// Bar colors (hex), shared by the app and the preview.
+const (
+	GreenHex  = "#16a34a"
+	YellowHex = "#eab308"
+	RedHex    = "#dc2626"
+)
+
 // Level is the bar color class.
 type Level int
 

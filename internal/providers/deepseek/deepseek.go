@@ -22,7 +22,7 @@ const KeychainService = "ai-limit.deepseek"
 const DefaultBaseURL = "https://api.deepseek.com"
 
 // AddKeyHint is the one-line instruction shown when the key is missing.
-const AddKeyHint = "Thêm key: security add-generic-password -s ai-limit.deepseek -a default -w <API_KEY>"
+const AddKeyHint = "Thêm key vào Keychain: mục ai-limit.deepseek"
 
 // Provider calls GET /user/balance. The key is read from Keychain on every
 // fetch and is never written anywhere.

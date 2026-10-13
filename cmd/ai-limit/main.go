@@ -33,15 +33,15 @@ type app struct {
 	quitting bool
 }
 
-// barColors maps view levels to theme colors.
+// barColor maps view levels to theme colors.
 func barColor(t *ui.Theme, l view.Level) ui.Color {
 	switch l {
 	case view.Red:
-		return t.Danger
+		return ui.Hex(view.RedHex)
 	case view.Yellow:
-		return t.Warning
+		return ui.Hex(view.YellowHex)
 	}
-	return t.Success
+	return ui.Hex(view.GreenHex)
 }
 
 func (a *app) line(c *ui.Context, now time.Time, l view.Line) {
