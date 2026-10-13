@@ -1,5 +1,10 @@
-// Package keychain reads secrets from the macOS Keychain, read-only.
-// It shells out to /usr/bin/security (no cgo) and never writes or modifies items.
+// Package keychain accesses the macOS Keychain.
+//
+// Read is read-only and runs /usr/bin/security find-generic-password for
+// items other apps own (Claude Code); no secret is passed on its command
+// line. Get and Set use the native Security.framework API (see
+// native_darwin.go) for the app's own items such as the DeepSeek key;
+// they never shell out.
 package keychain
 
 import (

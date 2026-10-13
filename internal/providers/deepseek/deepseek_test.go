@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hoanglong2311/AI-limit/internal/provider"
@@ -86,5 +87,24 @@ func TestNoKey(t *testing.T) {
 	}
 	if called {
 		t.Fatal("should not call API without a key")
+	}
+}
+
+func TestCheckTextNeverEchoesKey(t *testing.T) {
+	const key = "sk-secret-123"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	p := &Provider{BaseURL: srv.URL, Key: func(context.Context) (string, error) { return key, nil }}
+	_, err := p.Fetch(context.Background())
+	if err == nil || strings.Contains(err.Error(), key) {
+		t.Fatalf("err %v", err)
+	}
+	if got := CheckText(err); got != CheckBad {
+		t.Fatal(got)
+	}
+	if CheckText(nil) != CheckOK {
+		t.Fatal("ok text")
 	}
 }

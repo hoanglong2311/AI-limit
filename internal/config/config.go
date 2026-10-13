@@ -18,6 +18,53 @@ type Config struct {
 	CodexLabel  string `json:"codex_label"`
 	Interval    string `json:"interval"`
 	Demo        bool   `json:"demo"`
+	// Services turns rows on/off by service key (see ServiceKeys). A
+	// missing key means the default from Defaults.
+	Services map[string]bool `json:"services"`
+}
+
+// Service keys used in Services.
+const (
+	Claude   = "claude"
+	Codex    = "codex"
+	DeepSeek = "deepseek"
+	Grok     = "grok"
+)
+
+// ServiceKeys is the order shown in Settings.
+var ServiceKeys = []string{Claude, Codex, DeepSeek, Grok}
+
+// Enabled reports whether a service is on. Grok is off by default (no
+// data source yet); the others are on.
+func (c Config) Enabled(key string) bool {
+	if v, ok := c.Services[key]; ok {
+		return v
+	}
+	return key != Grok
+}
+
+// SetEnabled returns a copy with one service toggled (the map is copied).
+func (c Config) SetEnabled(key string, on bool) Config {
+	m := make(map[string]bool, len(ServiceKeys))
+	for _, k := range ServiceKeys {
+		m[k] = c.Enabled(k)
+	}
+	m[key] = on
+	c.Services = m
+	return c
+}
+
+// Save writes c to path atomically.
+func Save(path string, c Config) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(c, "", "  ")
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // Defaults are written when the file is missing.

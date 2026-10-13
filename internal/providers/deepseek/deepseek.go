@@ -22,7 +22,10 @@ const KeychainService = "ai-limit.deepseek"
 const DefaultBaseURL = "https://api.deepseek.com"
 
 // AddKeyHint is the one-line instruction shown when the key is missing.
-const AddKeyHint = "Thêm key vào Keychain: mục ai-limit.deepseek"
+const AddKeyHint = "Chưa có API key DeepSeek: nhập key trong Cài đặt"
+
+// KeychainAccount is the account of the Keychain item.
+const KeychainAccount = "default"
 
 // Provider calls GET /user/balance. The key is read from Keychain on every
 // fetch and is never written anywhere.
@@ -49,7 +52,7 @@ func (p *Provider) key(ctx context.Context) (string, error) {
 	if p.Key != nil {
 		return p.Key(ctx)
 	}
-	return keychain.Read(ctx, KeychainService, "")
+	return keychain.Get(KeychainService, "")
 }
 
 func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
@@ -114,4 +117,27 @@ func parse(body []byte) (provider.Usage, error) {
 		return provider.Usage{}, fmt.Errorf("deepseek: total_balance không hợp lệ %q", b.TotalBalance)
 	}
 	return provider.Usage{Kind: provider.KindBalance, Balance: v, Currency: strings.ToUpper(b.Currency)}, nil
+}
+
+// SaveKey stores the key in the Keychain (native API, never a command line).
+func SaveKey(key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return errors.New("key trống")
+	}
+	return keychain.Set(KeychainService, KeychainAccount, key)
+}
+
+// Check result texts shown in Settings; they never include the key.
+const (
+	CheckOK  = "Key hợp lệ"
+	CheckBad = "Key sai/không dùng được"
+)
+
+// CheckText maps the result of a balance call to the Settings text.
+func CheckText(err error) string {
+	if err == nil {
+		return CheckOK
+	}
+	return CheckBad
 }
