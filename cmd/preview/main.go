@@ -35,9 +35,9 @@ func main() {
 		{ID: "cw", Service: "Codex tuần", Account: "ChatGPT", Status: scheduler.StatusReset},
 		{ID: "ds", Service: "DeepSeek", Account: "default", Status: scheduler.StatusNoKey,
 			Err: deepseek.AddKeyHint},
-		{ID: "gk", Service: "Grok", Status: scheduler.StatusNoSource},
+		quota("Grok tuần", "", 27, 2*24*time.Hour+5*time.Hour, now),
 	}
-	on := map[string]bool{"claude": true, "codex": true, "deepseek": true, "grok": false}
+	on := map[string]bool{"claude": true, "codex": true, "deepseek": true, "grok": true}
 	rows = view.FilterEnabled(rows, func(k string) bool { return on[k] })
 	settingsPage := len(os.Args) > 1 && os.Args[1] == "-settings"
 	var b strings.Builder
@@ -72,9 +72,6 @@ body{margin:0;padding:24px;background:#c9d3e0;font-family:-apple-system,"Inter",
 				cls += " on"
 			}
 			note := ""
-			if k.k == "grok" {
-				note = `<div class="muted small">chưa có nguồn số liệu</div>`
-			}
 			fmt.Fprintf(&b, `<div class=row><div style="flex:1">%s%s</div><div class="%s"></div></div>`, e(k.n), note, cls)
 		}
 		b.WriteString(`</div><hr><div class=lines><span style="font-size:12px">API key DeepSeek</span>` +

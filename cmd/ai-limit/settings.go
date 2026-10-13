@@ -124,13 +124,18 @@ func (a *app) refreshNow() {
 	if wait > 0 {
 		a.claudeWait = now.Add(wait)
 	}
+	gwait := claude.CooldownLeft(a.grok.NextAllowed(), now)
+	a.grokWait = time.Time{}
+	if gwait > 0 {
+		a.grokWait = now.Add(gwait)
+	}
 	var ps []provider.Provider
 	for _, p := range a.sched.Providers() {
 		k := a.set.ids[p.ID()]
 		if k != "" && !a.set.enabled(k) {
 			continue
 		}
-		if k == config.Claude && wait > 0 {
+		if (k == config.Claude && wait > 0) || (k == config.Grok && gwait > 0) {
 			continue
 		}
 		ps = append(ps, p)
@@ -189,12 +194,7 @@ func (a *app) settingsView(c *ui.Context) {
 			ui.Text(c, "Dịch vụ hiển thị").FontSize(view.SmallSize).TextColor(t.TextMuted)
 			for _, k := range config.ServiceKeys {
 				ui.Row(c.Key(k)).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
-					ui.Column(c).Grow(1).Children(func() {
-						ui.Text(c, serviceNames[k]).FontSize(view.BodySize)
-						if k == config.Grok {
-							ui.Text(c, "chưa có nguồn số liệu").FontSize(view.SmallSize).TextColor(t.TextMuted)
-						}
-					})
+					ui.Text(c, serviceNames[k]).FontSize(view.BodySize).Grow(1)
 					ui.Switch(c, a.set.on[k])
 				})
 			}

@@ -137,7 +137,7 @@ go test -race ./...
 - `internal/keychain`: đọc secret từ macOS Keychain (chỉ đọc, qua
   `/usr/bin/security`).
 - `internal/providers`: `mock` (demo), `deepseek`, `claude`, `codex`, và
-  stub `grokbuild` (xem TODO trong code).
+  `grokbuild`.
 
 ## Secret
 
@@ -197,16 +197,40 @@ Nhãn tài khoản: `-codex-label ten-cua-ban`.
 v0.1.1: giao diện theo khối dịch vụ, đếm ngược reset, màu thanh
 xanh/vàng/đỏ, email Claude thật, DeepSeek báo "chưa có key", dmg có lối tắt Applications.
 v0.1.2: phát hành tự động qua GitHub Actions, dmg build trên macOS với cửa sổ cài đặt tự mở.
-Grok Build dự kiến ở v0.2.0 (chưa hiện trong menu).
 
 ## Cài đặt (v0.1.4)
 
 - Bật/tắt từng dịch vụ: Claude, Codex, DeepSeek, Grok. Dịch vụ tắt bị ẩn
   khỏi danh sách và không được gọi. Lưu trong `config.json` (mục
-  `services`, không có secret). Grok mặc định tắt: chưa có nguồn số liệu.
+  `services`, không có secret). Mọi dịch vụ mặc định bật.
 - Dịch vụ chưa cấu hình hiện một dòng hướng dẫn và nút **Mở Cài đặt**.
 - Claude/Codex: khi đã qua giờ reset mà chưa có số liệu mới, dòng hiện
   `đã reset, chưa dùng`.
 - Nút **Làm mới** cạnh dòng "Cập nhật lúc": làm mới tất cả ngay, không bấm
   được hai lần khi đang chạy. Claude vẫn giữ tối thiểu 5 phút giữa hai lần
   gọi; nếu chưa đủ, khối Claude hiện `làm mới được sau X phút`.
+
+## Grok Build (v0.1.5)
+
+Dòng **Grok · tuần** hiện % credit đã dùng trong kỳ hiện tại và thời gian
+còn lại đến hết kỳ, giống Claude.
+
+- Chỉ đọc `~/.grok/auth.json` (không đọc biến môi trường), chọn mục
+  `auth_mode` là `web_login`/`oidc` (bỏ qua `api_key`), nhiều mục thì lấy
+  `create_time` mới nhất. Chỉ giải mã `key`, `user_id`, `expires_at`,
+  `create_time`, `auth_mode`; không đọc `refresh_token`, không ghi file,
+  không bao giờ gọi endpoint token/refresh.
+- Hết hạn (còn dưới 5 phút tới `expires_at`, hoặc không có `expires_at` và
+  `create_time` quá 30 ngày): hiện `cần đăng nhập lại Grok Build`, không
+  gọi mạng. API trả 401/403 cũng vậy.
+- Gọi `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits`
+  (host cố định, bỏ qua `GROK_CLI_CHAT_PROXY_BASE_URL`/`config.toml`), chỉ
+  gửi `Authorization`, `x-userid`, `User-Agent: ai-limit/<version>`,
+  `Accept`; timeout 15 giây, không theo redirect.
+- Tối thiểu 5 phút giữa hai lần gọi, kể cả khi bấm **Làm mới**
+  (`làm mới được sau X phút`).
+- Lỗi khác hoặc phản hồi sai dạng: `lỗi` kèm gợi ý
+  `xem bằng lệnh /usage trong Grok Build`; không đoán số.
+- Chưa có `auth.json`: hướng dẫn cài Grok Build và chạy `grok login`, kèm
+  nút **Mở Cài đặt**.
+- Token và user_id không bao giờ xuất hiện trong log, lỗi hay giao diện.

@@ -40,6 +40,8 @@ type app struct {
 	// claudeWait is when Claude may be called again after a manual
 	// refresh was refused by the cooldown; zero when none.
 	claudeWait time.Time
+	grok       *grokbuild.Client
+	grokWait   time.Time
 }
 
 // barColor maps view levels to theme colors.
@@ -98,8 +100,9 @@ func (a *app) block(c *ui.Context, now time.Time, b view.Block) {
 				ui.Text(c, b.Account).FontSize(view.SmallSize).TextColor(t.TextMuted)
 			}
 		})
-		if b.Title == "Claude" {
-			if n := view.CooldownText(claude.CooldownLeft(a.claudeWait, now)); n != "" {
+		wait := map[string]time.Time{"Claude": a.claudeWait, "Grok": a.grokWait}
+		if w, ok := wait[b.Title]; ok {
+			if n := view.CooldownText(claude.CooldownLeft(w, now)); n != "" {
 				ui.Text(c, n).FontSize(view.SmallSize).TextColor(t.TextMuted).FontFeatures("tnum")
 			}
 		}
@@ -215,8 +218,11 @@ func trayIcon() []byte {
 func perProvider(ps []provider.Provider, def time.Duration) map[string]time.Duration {
 	m := map[string]time.Duration{"mock:Mock:demo-quota": 30 * time.Second}
 	for _, p := range ps {
-		if _, ok := p.(*claude.Provider); ok {
+		switch p.(type) {
+		case *claude.Provider:
 			m[p.ID()] = max(def, claude.MinInterval)
+		case *grokbuild.Provider:
+			m[p.ID()] = max(def, grokbuild.MinInterval)
 		}
 	}
 	return m
@@ -252,9 +258,10 @@ func main() {
 	ps = append(ps, claude.Rows(cl)...)
 	ps = append(ps,
 		&deepseek.Provider{Label: "default"},
-		&grokbuild.Provider{},
 	)
-	a := &app{claude: cl}
+	gc := &grokbuild.Client{}
+	ps = append(ps, &grokbuild.Provider{Client: gc})
+	a := &app{claude: cl, grok: gc}
 	a.set.init(cfgPath, cfg, ps)
 	a.sched = scheduler.New(scheduler.Config{
 		Skip:        a.set.skip,
