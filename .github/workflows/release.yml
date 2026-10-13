@@ -58,6 +58,8 @@ jobs:
         run: |
           dmg=$(ls dist/*.dmg)
           sum=$(shasum -a 256 "$dmg" | cut -d' ' -f1)
+          # The app verifies downloads against this asset.
+          (cd dist && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
           {
             echo "## $GITHUB_REF_NAME"
             echo
@@ -68,4 +70,4 @@ jobs:
             echo "$sum"
             echo '```'
           } > notes.md
-          gh release create "$GITHUB_REF_NAME" "$dmg" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          gh release create "$GITHUB_REF_NAME" "$dmg" "$dmg.sha256" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
