@@ -1,0 +1,71 @@
+# Build the universal app and drag-to-Applications dmg on macOS, then
+# publish a GitHub release. Runs only when a v* tag is pushed.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Check tag matches mygo.json version
+        run: |
+          v=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' mygo.json)
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != mygo.json v$v"; exit 1; }
+
+      - name: Python tools for .DS_Store
+        run: |
+          python3 -m venv "$RUNNER_TEMP/py"
+          "$RUNNER_TEMP/py/bin/pip" install --quiet ds_store==1.3.3 mac_alias==2.2.3
+
+      - name: Build app and dmg
+        env:
+          PYTHON: ${{ runner.temp }}/py/bin/python
+        run: ./scripts/package-macos.sh
+
+      - name: Verify dmg
+        run: |
+          dmg=$(ls dist/*.dmg)
+          hdiutil verify "$dmg"
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
+          test -L "$mnt/Applications"
+          test -f "$mnt/.DS_Store"
+          test -f "$mnt/.background/background.png"
+          codesign --verify --deep --strict "$mnt/AI-limit.app"
+          bless --info "$mnt" || true
+          hdiutil detach "$mnt"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dmg=$(ls dist/*.dmg)
+          sum=$(shasum -a 256 "$dmg" | cut -d' ' -f1)
+          {
+            echo "## $GITHUB_REF_NAME"
+            echo
+            echo "Cài đặt: mở dmg, kéo \`AI-limit.app\` vào \`Applications\`. App ký ad-hoc: lần đầu vào System Settings > Privacy & Security > Open Anyway."
+            echo
+            echo "**SHA-256** \`$(basename "$dmg")\`:"
+            echo '```'
+            echo "$sum"
+            echo '```'
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" "$dmg" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

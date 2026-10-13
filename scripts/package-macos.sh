@@ -16,7 +16,8 @@ DMG="dist/AI-limit-$VERSION-universal.dmg"
 PY=${PYTHON:-python3}
 export PATH="$PATH:/usr/sbin:/sbin"
 rm -rf build dist && mkdir -p dist
-go run github.com/egoist/mygo/cmd/mygo@v0.4.8 build -platform darwin/universal -skip-dmg -skip-notarize
+# mygo version comes from go.mod.
+go run github.com/egoist/mygo/cmd/mygo build -platform darwin/universal -skip-dmg -skip-notarize
 # Ad-hoc sign the whole bundle (seals Info.plist), no developer identity.
 if command -v codesign >/dev/null; then
   codesign --force --deep --sign - "$APP"
@@ -34,12 +35,16 @@ if command -v hdiutil >/dev/null; then
   cp scripts/dmg/background.png "$WORK/stage/.background/"
   ln -s /Applications "$WORK/stage/Applications"
   hdiutil create -volname "$VOL" -srcfolder "$WORK/stage" -fs HFS+ -ov -format UDRW "$WORK/rw.dmg"
-  DEV=$(hdiutil attach -readwrite -noverify -noautoopen "$WORK/rw.dmg" | awk '/Apple_HFS/{print $1}')
-  MNT="/Volumes/$VOL"
+  MNT="$WORK/mnt"
+  mkdir "$MNT"
+  DEV=$(hdiutil attach -readwrite -noverify -noautoopen -nobrowse -mountpoint "$MNT" "$WORK/rw.dmg" |
+    awk '/Apple_HFS/{print $1}')
   "$PY" scripts/dmg/dsstore.py "$MNT/.DS_Store" "$VOL" "$(stat -f %B "$MNT")" \
     "$(stat -f %i "$MNT/.background")" "$(stat -f %i "$MNT/.background/background.png")" "$NAME"
-  bless --folder "$MNT" --openfolder "$MNT" || true
-  hdiutil detach "$DEV"
+  # Finder opens the window on mount (finderInfo[2] = root folder).
+  bless --folder "$MNT" --openfolder "$MNT" || echo "cảnh báo: bless --openfolder thất bại" >&2
+  sync
+  hdiutil detach "$DEV" || { sleep 3; hdiutil detach -force "$DEV"; }
   hdiutil convert "$WORK/rw.dmg" -format UDZO -o "$DMG"
 else
   SIZE_MB=$(( $(du -sm "$WORK/stage" | cut -f1) + 16 ))

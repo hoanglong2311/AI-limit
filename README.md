@@ -9,8 +9,8 @@ pure Go, không cần cgo.
 
 1. Tải `AI-limit-<phiên bản>-universal.dmg` ở trang Releases (chạy được trên
    cả Apple Silicon và Intel, macOS 12 trở lên).
-2. Mở file dmg (nhấp đúp). Nếu Finder chưa tự mở cửa sổ, mở ổ `AI-limit`
-   ở thanh bên Finder. Kéo `AI-limit.app` vào thư mục `Applications` (lối tắt
+2. Mở file dmg (nhấp đúp): Finder mở cửa sổ cài đặt có mũi tên. (Nếu cửa
+   sổ không tự mở, mở ổ `AI-limit` ở thanh bên Finder.) Kéo `AI-limit.app` vào thư mục `Applications` (lối tắt
    có sẵn trong dmg), rồi tháo (eject) ổ `AI-limit`.
 3. App chưa được ký bằng Developer ID nên lần đầu macOS sẽ chặn. Mở
    `AI-limit` một lần, bấm Done/OK, rồi vào System Settings > Privacy &
@@ -96,6 +96,22 @@ từ libdmg-hfsplus, và Python có `ds_store` + `mac_alias` (đặt
 
 Có thể cross-compile từ Linux: `GOOS=darwin GOARCH=arm64 go build ./cmd/ai-limit`.
 
+### Phát hành
+
+Chỉ cần đẩy một tag `v*` khớp với `version` trong `mygo.json`:
+
+```sh
+# sửa "version" trong mygo.json (vd. 0.1.2), commit và push lên main, rồi:
+git tag v0.1.2 && git push origin v0.1.2
+```
+
+Workflow `.github/workflows/release.yml` (chạy trên `macos-latest`) sẽ chạy
+test, build app universal bằng mygo (phiên bản theo `go.mod`), ký ad-hoc,
+tạo dmg bằng `hdiutil` với bố cục cửa sổ Finder (ảnh nền, vị trí biểu tượng,
+lối tắt Applications, tự mở khi mount), kiểm tra dmg, rồi tạo GitHub Release
+kèm dmg và SHA-256 trong ghi chú. Chỉ dùng `GITHUB_TOKEN` mặc định; các
+action được pin theo commit SHA. Tag không khớp `mygo.json` thì workflow dừng.
+
 ### Kiểm thử
 
 ```sh
@@ -174,5 +190,5 @@ Nhãn tài khoản: `-codex-label ten-cua-ban`.
 
 v0.1.1: giao diện theo khối dịch vụ, đếm ngược reset, màu thanh
 xanh/vàng/đỏ, email Claude thật, DeepSeek báo "chưa có key", dmg có lối tắt Applications.
-Cửa sổ cài đặt tự mở khi mount chưa được kiểm chứng trên Mac, dự kiến v0.1.2.
+v0.1.2: phát hành tự động qua GitHub Actions, dmg build trên macOS với cửa sổ cài đặt tự mở.
 Grok Build dự kiến ở v0.2.0 (chưa hiện trong menu).
