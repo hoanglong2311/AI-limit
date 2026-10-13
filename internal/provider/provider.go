@@ -67,3 +67,21 @@ func (e notImpl) Error() string { return e.name + ": chưa triển khai" }
 
 // NotImplemented returns an error for a stub provider.
 func NotImplemented(name string) error { return notImpl{name} }
+
+// ErrReset marks a quota window whose reset time has passed with no newer
+// data: the row shows "đã reset, chưa dùng" instead of "chưa cập nhật".
+var ErrReset = errors.New("đã reset, chưa dùng")
+
+// Reset wraps a reason as an ErrReset error. It also matches ErrStale:
+// the old numbers are not current either way.
+func Reset(reason string) error { return resetErr{reason} }
+
+type resetErr struct{ reason string }
+
+func (e resetErr) Error() string { return e.reason + ": " + ErrReset.Error() }
+func (e resetErr) Is(target error) bool {
+	return target == ErrReset || target == ErrStale
+}
+
+// ErrNoSource marks a service with no data source yet (no numbers are guessed).
+var ErrNoSource = errors.New("chưa có nguồn số liệu")

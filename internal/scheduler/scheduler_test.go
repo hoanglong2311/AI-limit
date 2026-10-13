@@ -179,7 +179,64 @@ func TestResetPassedIsStale(t *testing.T) {
 		t.Fatal("want fresh")
 	}
 	c.Add(2 * time.Minute)
-	if st := s.Snapshot()[0]; st.Fresh() || st.Label() != "chưa cập nhật" {
+	if st := s.Snapshot()[0]; st.Fresh() || st.Label() != "đã reset, chưa dùng" {
 		t.Fatalf("%+v", st)
+	}
+}
+
+func TestEffective(t *testing.T) {
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	q := func(reset time.Time, last time.Time) State {
+		return State{Status: StatusOK, HasUsage: true, LastSuccess: last,
+			Usage: provider.Usage{Kind: provider.KindQuota, UsedPercent: 40, ResetAt: reset}}
+	}
+	cases := []struct {
+		name string
+		st   State
+		want Status
+		lbl  string
+	}{
+		{"fresh", q(now.Add(time.Hour), now.Add(-time.Minute)), StatusOK, ""},
+		{"reset passed", q(now.Add(-time.Minute), now.Add(-time.Minute)), StatusReset, "đã reset, chưa dùng"},
+		{"reset exactly now", q(now, now.Add(-time.Minute)), StatusReset, "đã reset, chưa dùng"},
+		{"reset passed and old", q(now.Add(-time.Minute), now.Add(-time.Hour)), StatusReset, "đã reset, chưa dùng"},
+		{"old, not reset", q(now.Add(time.Hour), now.Add(-time.Hour)), StatusStale, "chưa cập nhật"},
+		{"no reset time", q(time.Time{}, now.Add(-time.Minute)), StatusOK, ""},
+		{"balance never resets", State{Status: StatusOK, HasUsage: true, LastSuccess: now,
+			Usage: provider.Usage{Kind: provider.KindBalance}}, StatusOK, ""},
+		{"error kept", State{Status: StatusError}, StatusError, "lỗi"},
+	}
+	for _, c := range cases {
+		got := Effective(c.st, now, 15*time.Minute)
+		c.st.Status = got
+		if got != c.want || c.st.Label() != c.lbl {
+			t.Errorf("%s: got %v %q", c.name, got, c.st.Label())
+		}
+	}
+}
+
+func TestProviderResetError(t *testing.T) {
+	p := &fake{id: "x", fn: func(context.Context) (provider.Usage, error) {
+		return provider.Usage{}, provider.Reset("Codex: cửa sổ đã reset")
+	}}
+	s := New(Config{}, []provider.Provider{p}, nil)
+	s.RefreshOne(context.Background(), p)
+	if st := s.Snapshot()[0]; st.Status != StatusReset || st.Label() != "đã reset, chưa dùng" {
+		t.Fatalf("%+v", st)
+	}
+}
+
+func TestSkipDisabled(t *testing.T) {
+	var calls atomic.Int32
+	p := &fake{id: "off", fn: func(context.Context) (provider.Usage, error) {
+		calls.Add(1)
+		return provider.Usage{}, nil
+	}}
+	s := New(Config{Interval: time.Hour, Skip: func(string) bool { return true }}, []provider.Provider{p}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	s.Run(ctx)
+	if calls.Load() != 0 {
+		t.Fatal("disabled provider fetched")
 	}
 }

@@ -224,7 +224,7 @@ func (r *Reader) scan(ctx context.Context) (Snapshot, error) {
 	}
 	root := filepath.Join(home, "sessions")
 	if _, err := os.Stat(root); err != nil {
-		return Snapshot{}, provider.Stale("Codex: chưa có log trong " + root)
+		return Snapshot{}, provider.NoKey(SetupHint)
 	}
 	var files []fileInfo
 	for _, dir := range DayDirs(root, r.now()) {
@@ -303,6 +303,9 @@ type Provider struct {
 }
 
 // Rows returns "Codex 5h" and "Codex tuần" sharing one reader.
+// SetupHint is the one-line instruction shown when Codex has no logs yet.
+const SetupHint = "Chưa thấy log Codex: dùng Codex CLI một lần để có số liệu"
+
 func Rows(r *Reader) []provider.Provider {
 	return []provider.Provider{&Provider{r, FiveHour}, &Provider{r, Weekly}}
 }
@@ -345,7 +348,7 @@ func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
 // the reset time has passed, or it was observed longer ago than the window.
 func checkFresh(w *Snap, defMinutes int, now time.Time) error {
 	if !w.ResetAt.IsZero() && !now.Before(w.ResetAt) {
-		return provider.Stale("Codex: cửa sổ đã reset từ sau lần dùng cuối")
+		return provider.Reset("Codex: cửa sổ đã reset từ sau lần dùng cuối")
 	}
 	m := w.WindowMinutes
 	if m <= 0 {

@@ -15,11 +15,13 @@ import (
 type Status int
 
 const (
-	StatusPending Status = iota // never fetched successfully, no error yet
-	StatusOK                    // last fetch succeeded and is fresh
-	StatusError                 // last fetch failed
-	StatusStale                 // last success is older than StaleAfter
-	StatusNoKey                 // API key not configured; Err holds instructions
+	StatusPending  Status = iota // never fetched successfully, no error yet
+	StatusOK                     // last fetch succeeded and is fresh
+	StatusError                  // last fetch failed
+	StatusStale                  // last success is older than StaleAfter
+	StatusNoKey                  // not configured; Err holds one line of instructions
+	StatusReset                  // window reset with no newer data
+	StatusNoSource               // service has no data source yet
 )
 
 // HighThreshold is the used % above which a row is highlighted.
@@ -51,6 +53,10 @@ func (s State) Label() string {
 		return "lỗi"
 	case StatusNoKey:
 		return "chưa có key"
+	case StatusReset:
+		return "đã reset, chưa dùng"
+	case StatusNoSource:
+		return "chưa có nguồn số liệu"
 	case StatusPending, StatusStale:
 		return "chưa cập nhật"
 	}
@@ -62,6 +68,9 @@ type Config struct {
 	Interval   time.Duration // default refresh interval
 	Timeout    time.Duration // per fetch
 	StaleAfter time.Duration // success older than this is stale; default 3*Interval
+	// Skip, when set, reports providers that must not be fetched
+	// (disabled in Settings).
+	Skip func(id string) bool
 	// PerProvider overrides Interval by provider ID.
 	PerProvider map[string]time.Duration
 	Now         func() time.Time
@@ -118,7 +127,13 @@ func (s *Scheduler) RefreshOne(ctx context.Context, p provider.Provider) {
 	st := s.states[p.ID()]
 	st.LastAttempt = now
 	st.Account = p.Account() // may be detected only after a fetch
-	if errors.Is(err, provider.ErrNoKey) {
+	if errors.Is(err, provider.ErrNoSource) {
+		st.Status = StatusNoSource
+		st.Err = ""
+	} else if errors.Is(err, provider.ErrReset) {
+		st.Status = StatusReset
+		st.Err = err.Error()
+	} else if errors.Is(err, provider.ErrNoKey) {
 		st.Status = StatusNoKey
 		st.Err = err.Error()
 	} else if errors.Is(err, provider.ErrStale) {
@@ -179,7 +194,9 @@ func (s *Scheduler) Run(ctx context.Context) {
 			t := time.NewTicker(s.IntervalFor(p.ID()))
 			defer t.Stop()
 			for {
-				s.RefreshOne(ctx, p)
+				if s.cfg.Skip == nil || !s.cfg.Skip(p.ID()) {
+					s.RefreshOne(ctx, p)
+				}
 				select {
 				case <-ctx.Done():
 					return
@@ -214,16 +231,42 @@ func (s *Scheduler) Snapshot() []State {
 	out := make([]State, 0, len(s.providers))
 	for _, p := range s.providers {
 		st := *s.states[p.ID()]
-		if st.Status == StatusOK && now.Sub(st.LastSuccess) > s.cfg.StaleAfter {
-			st.Status = StatusStale
-		}
-		// The window has reset since the numbers were fetched: they no
-		// longer describe the current window.
-		if st.Status == StatusOK && st.Usage.Kind == provider.KindQuota &&
-			!st.Usage.ResetAt.IsZero() && !now.Before(st.Usage.ResetAt) {
-			st.Status = StatusStale
-		}
+		st.Status = Effective(st, now, s.cfg.StaleAfter)
 		out = append(out, st)
 	}
 	return out
+}
+
+// Effective is the status to display at now. Numbers whose window reset
+// time has passed show "đã reset, chưa dùng" (there is no newer data);
+// otherwise numbers older than staleAfter turn stale.
+func Effective(st State, now time.Time, staleAfter time.Duration) Status {
+	if st.Status != StatusOK {
+		return st.Status
+	}
+	if st.HasUsage && st.Usage.Kind == provider.KindQuota &&
+		!st.Usage.ResetAt.IsZero() && !now.Before(st.Usage.ResetAt) {
+		return StatusReset
+	}
+	if now.Sub(st.LastSuccess) > staleAfter {
+		return StatusStale
+	}
+	return StatusOK
+}
+
+// Providers returns the providers in order.
+func (s *Scheduler) Providers() []provider.Provider { return s.providers }
+
+// RefreshAll fetches the given providers concurrently and returns when
+// all are done.
+func (s *Scheduler) RefreshAll(ctx context.Context, ps []provider.Provider) {
+	var wg sync.WaitGroup
+	for _, p := range ps {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.RefreshOne(ctx, p)
+		}()
+	}
+	wg.Wait()
 }

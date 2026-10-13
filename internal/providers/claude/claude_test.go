@@ -95,6 +95,12 @@ func TestStaleCases(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c, n := setup(t, tc.status, `{}`, tc.cred)
 			_, err := Rows(c)[0].Fetch(context.Background())
+			if name == "missing" {
+				if !errors.Is(err, provider.ErrNoKey) || err.Error() != SetupHint {
+					t.Fatalf("want setup hint, got %v", err)
+				}
+				return
+			}
 			if !errors.Is(err, provider.ErrStale) {
 				t.Fatalf("want stale, got %v", err)
 			}
@@ -176,5 +182,42 @@ func TestCachedAfterResetIsStale(t *testing.T) {
 	cur = now.Add(4 * time.Hour) // past 05:00 reset, still cached
 	if _, err := p.Fetch(context.Background()); !errors.Is(err, provider.ErrStale) {
 		t.Fatalf("want stale, got %v", err)
+	}
+}
+
+func TestCachedAfterResetIsReset(t *testing.T) {
+	// Reset errors keep matching ErrStale and are also ErrReset.
+	if err := provider.Reset("x"); !errors.Is(err, provider.ErrReset) || !errors.Is(err, provider.ErrStale) {
+		t.Fatal(err)
+	}
+}
+
+func TestCooldownLeft(t *testing.T) {
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	if d := CooldownLeft(time.Time{}, now); d != 0 {
+		t.Fatalf("never called: %v", d)
+	}
+	if d := CooldownLeft(now.Add(3*time.Minute), now); d != 3*time.Minute {
+		t.Fatalf("3m: %v", d)
+	}
+	if d := CooldownLeft(now.Add(-time.Second), now); d != 0 {
+		t.Fatalf("passed: %v", d)
+	}
+}
+
+func TestNextAllowedAfterCall(t *testing.T) {
+	now := time.Now()
+	c := &Client{Now: func() time.Time { return now }, MinInterval: MinInterval,
+		Credential: func(context.Context) (string, error) { return "", errors.New("none") }}
+	if !c.NextAllowed().IsZero() {
+		t.Fatal("want zero before any call")
+	}
+	_, _ = Rows(c)[0].Fetch(context.Background())
+	if got := c.NextAllowed(); !got.Equal(now.Add(5 * time.Minute)) {
+		t.Fatalf("next %v", got)
+	}
+	// A manual refresh 2 minutes later must wait 3 more minutes.
+	if d := CooldownLeft(c.NextAllowed(), now.Add(2*time.Minute)); d != 3*time.Minute {
+		t.Fatalf("cooldown %v", d)
 	}
 }

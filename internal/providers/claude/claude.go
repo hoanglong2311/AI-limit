@@ -45,6 +45,33 @@ const (
 	userAgent   = "ai-limit/0.1"
 )
 
+// SetupHint is the one-line instruction shown when no credential exists.
+const SetupHint = "Chưa đăng nhập Claude Code: chạy `claude` và đăng nhập một lần"
+
+// NextAllowed is the earliest time a new HTTP call may be made; zero if
+// no call was made yet.
+func (c *Client) NextAllowed() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.last.IsZero() {
+		return time.Time{}
+	}
+	min := c.MinInterval
+	if min <= 0 {
+		min = MinInterval
+	}
+	return c.last.Add(min)
+}
+
+// CooldownLeft is how long until a manual refresh may call the API again
+// (0 when allowed now). It never returns a negative duration.
+func CooldownLeft(next, now time.Time) time.Duration {
+	if next.IsZero() || !now.Before(next) {
+		return 0
+	}
+	return next.Sub(now)
+}
+
 // Window selects which usage window a row shows.
 type Window string
 
@@ -176,7 +203,7 @@ func (c *Client) token(ctx context.Context) (string, error) {
 	}
 	raw, err := read(ctx)
 	if err != nil {
-		return "", provider.Stale("Claude: chưa có credential trong Keychain (đăng nhập Claude Code)")
+		return "", provider.NoKey(SetupHint)
 	}
 	var cr credential
 	if err := json.Unmarshal([]byte(raw), &cr); err != nil {
@@ -321,7 +348,7 @@ func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
 		u.ResetAt = t
 		// A cached response may predate the reset: never pass it off as fresh.
 		if !p.Client.now().Before(t) {
-			return provider.Usage{}, provider.Stale("Claude: cửa sổ đã reset, chờ lần lấy số liệu mới")
+			return provider.Usage{}, provider.Reset("Claude: cửa sổ đã reset, chờ lần lấy số liệu mới")
 		}
 	}
 	return u, nil

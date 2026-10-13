@@ -124,8 +124,8 @@ func TestLegacyResetsInSeconds(t *testing.T) {
 
 func TestNoSessionsDir(t *testing.T) {
 	_, e5, _, _ := fetch(t, t.TempDir(), time.Now())
-	if !errors.Is(e5, provider.ErrStale) {
-		t.Fatalf("want stale, got %v", e5)
+	if !errors.Is(e5, provider.ErrNoKey) || e5.Error() != SetupHint {
+		t.Fatalf("want setup hint, got %v", e5)
 	}
 }
 
