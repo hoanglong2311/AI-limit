@@ -20,7 +20,7 @@ import (
 )
 
 // Current is the app version; a test keeps it equal to mygo.json.
-const Current = "0.1.7"
+const Current = "0.1.8"
 
 // LatestURL is the GitHub API endpoint for the newest release.
 const LatestURL = "https://api.github.com/repos/hoanglong2311/AI-limit/releases/latest"
