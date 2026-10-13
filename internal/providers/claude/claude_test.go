@@ -163,3 +163,18 @@ func TestEmailDetection(t *testing.T) {
 		t.Fatal("local email")
 	}
 }
+
+func TestCachedAfterResetIsStale(t *testing.T) {
+	c, _ := setup(t, 200, okBody, cred("tok", now.Add(10*time.Hour)))
+	cur := now
+	c.Now = func() time.Time { return cur }
+	c.MinInterval = 24 * time.Hour
+	p := Rows(c)[0]
+	if _, err := p.Fetch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	cur = now.Add(4 * time.Hour) // past 05:00 reset, still cached
+	if _, err := p.Fetch(context.Background()); !errors.Is(err, provider.ErrStale) {
+		t.Fatalf("want stale, got %v", err)
+	}
+}

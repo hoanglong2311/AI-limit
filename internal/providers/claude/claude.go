@@ -319,6 +319,10 @@ func (p *Provider) Fetch(ctx context.Context) (provider.Usage, error) {
 			return provider.Usage{}, fmt.Errorf("Claude: resets_at không hợp lệ %q", *w.ResetsAt)
 		}
 		u.ResetAt = t
+		// A cached response may predate the reset: never pass it off as fresh.
+		if !p.Client.now().Before(t) {
+			return provider.Usage{}, provider.Stale("Claude: cửa sổ đã reset, chờ lần lấy số liệu mới")
+		}
 	}
 	return u, nil
 }

@@ -167,3 +167,19 @@ func TestNoKeyStatus(t *testing.T) {
 		t.Fatalf("%+v", st)
 	}
 }
+
+func TestResetPassedIsStale(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC)}
+	p := &fake{id: "r", fn: func(context.Context) (provider.Usage, error) {
+		return provider.Usage{Kind: provider.KindQuota, UsedPercent: 90, ResetAt: c.Now().Add(time.Minute)}, nil
+	}}
+	s := New(Config{Now: c.Now, Interval: time.Hour}, []provider.Provider{p}, nil)
+	s.RefreshOne(context.Background(), p)
+	if !s.Snapshot()[0].Fresh() {
+		t.Fatal("want fresh")
+	}
+	c.Add(2 * time.Minute)
+	if st := s.Snapshot()[0]; st.Fresh() || st.Label() != "chưa cập nhật" {
+		t.Fatalf("%+v", st)
+	}
+}

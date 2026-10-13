@@ -217,6 +217,12 @@ func (s *Scheduler) Snapshot() []State {
 		if st.Status == StatusOK && now.Sub(st.LastSuccess) > s.cfg.StaleAfter {
 			st.Status = StatusStale
 		}
+		// The window has reset since the numbers were fetched: they no
+		// longer describe the current window.
+		if st.Status == StatusOK && st.Usage.Kind == provider.KindQuota &&
+			!st.Usage.ResetAt.IsZero() && !now.Before(st.Usage.ResetAt) {
+			st.Status = StatusStale
+		}
 		out = append(out, st)
 	}
 	return out
