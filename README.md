@@ -9,9 +9,9 @@ pure Go, không cần cgo.
 
 1. Tải `AI-limit-<phiên bản>-universal.dmg` ở trang Releases (chạy được trên
    cả Apple Silicon và Intel, macOS 12 trở lên).
-2. Mở file dmg: Finder tự mở cửa sổ cài đặt. Kéo biểu tượng `AI-limit`
-   sang biểu tượng `Applications` (theo mũi tên), rồi tháo (eject) ổ
-   `AI-limit` trong Finder.
+2. Mở file dmg (nhấp đúp). Nếu Finder chưa tự mở cửa sổ, mở ổ `AI-limit`
+   ở thanh bên Finder. Kéo `AI-limit.app` vào thư mục `Applications` (lối tắt
+   có sẵn trong dmg), rồi tháo (eject) ổ `AI-limit`.
 3. App chưa được ký bằng Developer ID nên lần đầu macOS sẽ chặn. Mở
    `AI-limit` một lần, bấm Done/OK, rồi vào System Settings > Privacy &
    Security, kéo xuống và bấm "Open Anyway" cho AI-limit, xác nhận bằng mật
@@ -173,5 +173,6 @@ Nhãn tài khoản: `-codex-label ten-cua-ban`.
 ## Trạng thái
 
 v0.1.1: giao diện theo khối dịch vụ, đếm ngược reset, màu thanh
-xanh/vàng/đỏ, email Claude thật, DeepSeek báo "chưa có key", dmg kéo-thả.
+xanh/vàng/đỏ, email Claude thật, DeepSeek báo "chưa có key", dmg có lối tắt Applications.
+Cửa sổ cài đặt tự mở khi mount chưa được kiểm chứng trên Mac, dự kiến v0.1.2.
 Grok Build dự kiến ở v0.2.0 (chưa hiện trong menu).
