@@ -73,21 +73,23 @@ func (a *app) startUpdate() {
 	}()
 }
 
-// updateRow is the button (and error) above the footer, only when a newer
-// release exists.
-func (a *app) updateRow(c *ui.Context) {
+// updateButton is a compact button in the footer row, left of Thoát, only
+// when a newer release exists.
+func (a *app) updateButton(c *ui.Context) {
 	if a.upd.rel == nil {
 		return
 	}
-	t := c.Theme()
-	ui.Column(c).Gap(4).Children(func() {
-		label := view.UpdateLabel(a.upd.rel.Tag)
-		if a.upd.busy {
-			label = "Đang tải " + a.upd.rel.Tag + "…"
-		}
-		ui.PrimaryButton(c, label).Disabled(a.upd.busy).OnClick(a.startUpdate)
-		if a.upd.err != "" {
-			ui.Text(c, a.upd.err).FontSize(view.SmallSize).TextColor(t.Danger)
-		}
-	})
+	label := view.UpdateLabel(a.upd.rel.Tag)
+	if a.upd.busy {
+		label = "Đang tải…"
+	}
+	ui.Button(c, label).FontSize(view.SmallSize).TextColor(c.Theme().Accent).
+		Disabled(a.upd.busy).OnClick(a.startUpdate)
+}
+
+// updateError is shown under the footer after a failed update.
+func (a *app) updateError(c *ui.Context) {
+	if a.upd.err != "" {
+		ui.Text(c, a.upd.err).FontSize(view.SmallSize).TextColor(c.Theme().Danger)
+	}
 }

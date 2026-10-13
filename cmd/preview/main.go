@@ -48,8 +48,9 @@ body{margin:0;padding:24px;background:#c9d3e0;font-family:-apple-system,"Inter",
 .track{width:%s;height:%s;border-radius:%s;background:rgba(107,114,128,.2);overflow:hidden}.fill{height:100%%;border-radius:%s}
 .pct{width:%s;text-align:right;font-variant-numeric:tabular-nums}.note{padding-left:%s;margin-top:2px;font-variant-numeric:tabular-nums;word-break:break-all}
 .err{color:#dc2626}hr{border:0;border-top:1px solid rgba(0,0,0,.1);margin:0}
-.foot{display:flex;align-items:center;gap:%s}.upd{display:block;text-align:center;font-size:13px;font-weight:500;color:#fff;background:#2563eb;border-radius:6px;padding:5px 0;box-shadow:0 1px 1px rgba(0,0,0,.12)}
+.foot{display:flex;align-items:center;gap:%s}.upd{font-size:11px;color:#2563eb}
 .btn{font-size:12px;padding:2px 10px;border-radius:5px;background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.25),0 1px 1px rgba(0,0,0,.08)}
+.btn.upd{font-size:11px;color:#2563eb}
 </style><div class=win><div class=blocks>`,
 		px(view.WinWidth), px(view.Pad), px(view.FooterGap), px(view.BlockGap), px(view.TitleGap), px(view.ColGap),
 		px(view.TitleSize), px(view.SmallSize), px(view.RowGap), px(view.ColGap), px(view.BodySize), px(view.LabelWidth),
@@ -85,8 +86,7 @@ body{margin:0;padding:24px;background:#c9d3e0;font-family:-apple-system,"Inter",
 		}
 		b.WriteString(`</div></div>`)
 	}
-	fmt.Fprintf(&b, `</div><hr><span class=upd>%s</span><div class=foot>`, e(view.UpdateLabel("v0.1.4")))
-	fmt.Fprintf(&b, `<span class="muted small" style="flex:1">%s</span><span class=btn>Thoát</span></div></div>`,
-		e(view.LastUpdated(now, rows)))
+	fmt.Fprintf(&b, `</div><hr><div class=foot><span class="muted small" style="flex:1">%s</span>`, e(view.LastUpdated(now, rows)))
+	fmt.Fprintf(&b, `<span class="btn upd">%s</span><span class=btn>Thoát</span></div></div>`, e(view.UpdateLabel("v0.1.4")))
 	os.Stdout.WriteString(b.String())
 }

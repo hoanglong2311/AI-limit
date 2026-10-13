@@ -114,12 +114,13 @@ func (a *app) view(c *ui.Context) {
 			})
 		})
 		ui.Divider(c)
-		a.updateRow(c)
 		ui.Row(c).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, view.LastUpdated(now, a.rows)).FontSize(view.SmallSize).
 				TextColor(t.TextMuted).FontFeatures("tnum").Grow(1)
+			a.updateButton(c)
 			ui.Button(c, "Thoát").OnClick(mygo.App.Quit)
 		})
+		a.updateError(c)
 	})
 }
 
