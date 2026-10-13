@@ -253,6 +253,13 @@ func Note(now time.Time, s scheduler.State) string {
 	return ""
 }
 
+// Footer is the footer text: app version then the last update, e.g.
+// "v0.1.7 · Cập nhật lúc 20:05". version is update.Current (passed in so
+// this package stays free of the update dependency).
+func Footer(version string, now time.Time, states []scheduler.State) string {
+	return "v" + strings.TrimPrefix(version, "v") + " · " + LastUpdated(now, states)
+}
+
 // LastUpdated is the single footer line: the newest successful fetch.
 func LastUpdated(now time.Time, states []scheduler.State) string {
 	var last time.Time

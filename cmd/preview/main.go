@@ -15,6 +15,7 @@ import (
 	"github.com/hoanglong2311/AI-limit/internal/provider"
 	"github.com/hoanglong2311/AI-limit/internal/providers/deepseek"
 	"github.com/hoanglong2311/AI-limit/internal/scheduler"
+	"github.com/hoanglong2311/AI-limit/internal/update"
 	"github.com/hoanglong2311/AI-limit/internal/view"
 )
 
@@ -121,7 +122,7 @@ body{margin:0;padding:24px;background:#c9d3e0;font-family:-apple-system,"Inter",
 		}
 		b.WriteString(`</div></div>`)
 	}
-	fmt.Fprintf(&b, `</div><hr><div class=foot><span class="muted small" style="flex:1">%s</span>`, e(view.LastUpdated(now, rows)))
+	fmt.Fprintf(&b, `</div><hr><div class=foot><span class="muted small" style="flex:1">%s</span>`, e(view.Footer(update.Current, now, rows)))
 	b.WriteString(`<span class="btn s">Làm mới</span></div>`)
 	b.WriteString(`<div class=foot><span style="flex:1"></span><span class=btn>Cài đặt</span><span class=btn>Thoát</span></div></div>`)
 	os.Stdout.WriteString(b.String())

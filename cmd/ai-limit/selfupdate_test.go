@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
+
+	"github.com/hoanglong2311/AI-limit/internal/scheduler"
 
 	"github.com/hoanglong2311/AI-limit/internal/update"
 )
@@ -53,5 +56,18 @@ func TestStartupHandlesUpdateFlags(t *testing.T) {
 	mainFn := regexp.MustCompile(`(?s)func main\(\) \{.*?\n\}`).Find(b)
 	if mainFn == nil || !regexp.MustCompile(`(?s)flag\.Parse\(\).*if \*finishUpdate \{\s*runFinishHelper\(\)`).Match(mainFn) {
 		t.Fatal("main() no longer handles -finish-update after flag.Parse")
+	}
+}
+
+func TestFooterShowsUpdateCurrent(t *testing.T) {
+	now := time.Date(2026, 10, 13, 20, 5, 0, 0, time.Local)
+	got := footerText(now, []scheduler.State{{LastSuccess: now}})
+	if want := "v" + update.Current + " · Cập nhật lúc 20:05"; got != want {
+		t.Fatalf("%q want %q", got, want)
+	}
+	// The popup must render footerText, not a separate string.
+	b, _ := os.ReadFile("main.go")
+	if !regexp.MustCompile(`ui\.Text\(c, footerText\(now, rows\)\)`).Match(b) {
+		t.Fatal("footer no longer uses footerText")
 	}
 }

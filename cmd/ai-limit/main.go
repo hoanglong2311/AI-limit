@@ -144,7 +144,7 @@ func (a *app) view(c *ui.Context) {
 		})
 		ui.Divider(c)
 		ui.Row(c).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, view.LastUpdated(now, rows)).FontSize(view.SmallSize).
+			ui.Text(c, footerText(now, rows)).FontSize(view.SmallSize).
 				TextColor(t.TextMuted).FontFeatures("tnum").Grow(1)
 			label := "Làm mới"
 			if a.refreshing {
@@ -288,4 +288,10 @@ func main() {
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// footerText shows the running version (update.Current, the value the
+// update checker compares against) and the last update time.
+func footerText(now time.Time, rows []scheduler.State) string {
+	return view.Footer(update.Current, now, rows)
 }

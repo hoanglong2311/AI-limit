@@ -133,3 +133,14 @@ func TestGrokNeverBalanceLabel(t *testing.T) {
 		t.Fatal(b[1].Lines[0].Label)
 	}
 }
+
+func TestFooter(t *testing.T) {
+	now := time.Date(2026, 10, 13, 20, 5, 0, 0, time.Local)
+	rows := []scheduler.State{{LastSuccess: now}}
+	if got := Footer("0.1.7", now, rows); got != "v0.1.7 · Cập nhật lúc 20:05" {
+		t.Fatal(got)
+	}
+	if got := Footer("v0.1.7", now, nil); got != "v0.1.7 · Chưa cập nhật lần nào" {
+		t.Fatal(got)
+	}
+}
