@@ -48,3 +48,9 @@ func TestLastUpdated(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestUpdateLabel(t *testing.T) {
+	if UpdateLabel("v0.1.4") != "Cập nhật lên v0.1.4" || UpdateLabel("0.2.0") != "Cập nhật lên v0.2.0" {
+		t.Fatal(UpdateLabel("v0.1.4"))
+	}
+}

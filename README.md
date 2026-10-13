@@ -22,7 +22,13 @@ pure Go, không cần cgo.
 5. Kiểm tra file tải về (tuỳ chọn): `shasum -a 256 AI-limit-*.dmg`, so với
    SHA-256 trong ghi chú phát hành.
 
-Nâng cấp: thoát app (Thoát hoặc Cmd+Q), kéo bản mới vào `Applications`
+Cập nhật trong app: khi mở và mỗi ngày một lần, app hỏi GitHub (không dùng
+token) xem có bản mới không. Nếu có, nút "Cập nhật lên vX.Y.Z" hiện ở cuối
+menu: bấm để tải dmg vào `~/Downloads`, app kiểm tra SHA-256 với file
+`.sha256` của bản phát hành (hoặc ghi chú phát hành) rồi mới mở dmg; không
+khớp thì xoá file và báo lỗi. Mất mạng hay bị giới hạn lượt gọi thì bỏ qua.
+
+Nâng cấp thủ công: thoát app (Thoát hoặc Cmd+Q), kéo bản mới vào `Applications`
 và chọn Replace.
 
 ## Cấu hình

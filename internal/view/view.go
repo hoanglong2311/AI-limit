@@ -197,3 +197,8 @@ func LastUpdated(now time.Time, states []scheduler.State) string {
 	}
 	return "Cập nhật lúc " + Clock(now, last)
 }
+
+// UpdateLabel is the update button text, e.g. "Cập nhật lên v0.1.4".
+func UpdateLabel(tag string) string {
+	return "Cập nhật lên v" + strings.TrimPrefix(tag, "v")
+}

@@ -31,6 +31,7 @@ type app struct {
 	sched    *scheduler.Scheduler
 	rows     []scheduler.State
 	quitting bool
+	upd      updater
 }
 
 // barColor maps view levels to theme colors.
@@ -113,6 +114,7 @@ func (a *app) view(c *ui.Context) {
 			})
 		})
 		ui.Divider(c)
+		a.updateRow(c)
 		ui.Row(c).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, view.LastUpdated(now, a.rows)).FontSize(view.SmallSize).
 				TextColor(t.TextMuted).FontFeatures("tnum").Grow(1)
@@ -142,7 +144,7 @@ func (a *app) ready() {
 		log.Fatal("tray: ", err)
 	}
 	a.win = mygo.NewWindow(mygo.WindowOptions{
-		Title: "AI Limit", Width: view.WinWidth, Height: 400, Hidden: true, Frameless: true,
+		Title: "AI Limit", Width: view.WinWidth, Height: 440, Hidden: true, Frameless: true,
 		DisableResize: true, DisableMinimize: true, DisableMaximize: true,
 		DisableFullScreen: true, AlwaysOnTop: true, SkipTaskbar: true,
 		Content: ui.View(a.view),
@@ -159,6 +161,7 @@ func (a *app) ready() {
 	ctx, cancel := context.WithCancel(context.Background())
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { cancel(); a.tray.Destroy() })
 	go a.sched.Run(ctx)
+	go a.checkLoop(ctx)
 }
 
 func trayIcon() []byte {
