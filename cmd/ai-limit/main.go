@@ -20,6 +20,7 @@ import (
 	"github.com/hoanglong2311/AI-limit/internal/providers/claude"
 	"github.com/hoanglong2311/AI-limit/internal/providers/codex"
 	"github.com/hoanglong2311/AI-limit/internal/providers/deepseek"
+	"github.com/hoanglong2311/AI-limit/internal/providers/grokbuild"
 	"github.com/hoanglong2311/AI-limit/internal/providers/mock"
 	"github.com/hoanglong2311/AI-limit/internal/scheduler"
 	"github.com/hoanglong2311/AI-limit/internal/view"
@@ -32,6 +33,13 @@ type app struct {
 	rows     []scheduler.State
 	quitting bool
 	upd      updater
+	set      settings
+	claude   *claude.Client
+	// refreshing is true while a manual refresh runs (button disabled).
+	refreshing bool
+	// claudeWait is when Claude may be called again after a manual
+	// refresh was refused by the cooldown; zero when none.
+	claudeWait time.Time
 }
 
 // barColor maps view levels to theme colors.
@@ -90,6 +98,18 @@ func (a *app) block(c *ui.Context, now time.Time, b view.Block) {
 				ui.Text(c, b.Account).FontSize(view.SmallSize).TextColor(t.TextMuted)
 			}
 		})
+		if b.Title == "Claude" {
+			if n := view.CooldownText(claude.CooldownLeft(a.claudeWait, now)); n != "" {
+				ui.Text(c, n).FontSize(view.SmallSize).TextColor(t.TextMuted).FontFeatures("tnum")
+			}
+		}
+		if b.Setup != "" {
+			ui.Text(c, b.Setup).FontSize(view.SmallSize).TextColor(t.TextMuted)
+			ui.Row(c).Children(func() {
+				ui.Button(c, "Mở Cài đặt").FontSize(view.SmallSize).OnClick(a.openSettings)
+			})
+			return
+		}
 		ui.Column(c).Gap(view.RowGap).Children(func() {
 			for _, l := range b.Lines {
 				a.line(c, now, l)
@@ -103,21 +123,35 @@ func (a *app) view(c *ui.Context) {
 		a.win.Hide()
 	}
 	c.OnShortcut(ui.Cmd, ui.KeyQ, mygo.App.Quit)
+	if a.set.open {
+		a.settingsView(c)
+		return
+	}
 	now := time.Now()
 	t := c.Theme()
+	rows := view.FilterEnabled(a.rows, a.set.enabled)
 	ui.Column(c).Fill().Padding(view.Pad).Gap(view.FooterGap).Children(func() {
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Gap(view.BlockGap).Children(func() {
-				for _, b := range view.Group(a.rows) {
+				for _, b := range view.Group(rows) {
 					a.block(c, now, b)
 				}
 			})
 		})
 		ui.Divider(c)
 		ui.Row(c).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, view.LastUpdated(now, a.rows)).FontSize(view.SmallSize).
+			ui.Text(c, view.LastUpdated(now, rows)).FontSize(view.SmallSize).
 				TextColor(t.TextMuted).FontFeatures("tnum").Grow(1)
+			label := "Làm mới"
+			if a.refreshing {
+				label = "Đang làm mới…"
+			}
+			ui.Button(c, label).FontSize(view.SmallSize).Disabled(a.refreshing).OnClick(a.refreshNow)
+		})
+		ui.Row(c).Gap(view.ColGap).AlignItems(ui.Center).Children(func() {
+			ui.Spacer(c)
 			a.updateButton(c)
+			ui.Button(c, "Cài đặt").OnClick(a.openSettings)
 			ui.Button(c, "Thoát").OnClick(mygo.App.Quit)
 		})
 		a.updateError(c)
@@ -214,12 +248,16 @@ func main() {
 		)
 	}
 	ps = append(ps, codex.Rows(&codex.Reader{Label: *codexLabel})...)
-	ps = append(ps, claude.Rows(&claude.Client{Email: *claudeEmail})...)
+	cl := &claude.Client{Email: *claudeEmail}
+	ps = append(ps, claude.Rows(cl)...)
 	ps = append(ps,
 		&deepseek.Provider{Label: "default"},
+		&grokbuild.Provider{},
 	)
-	a := &app{}
+	a := &app{claude: cl}
+	a.set.init(cfgPath, cfg, ps)
 	a.sched = scheduler.New(scheduler.Config{
+		Skip:        a.set.skip,
 		Interval:    *interval,
 		Timeout:     30 * time.Second,
 		PerProvider: perProvider(ps, *interval),

@@ -145,15 +145,13 @@ Secret chỉ lưu trong Keychain, không bao giờ trong repo.
 
 ### DeepSeek
 
-Lấy API key tại https://platform.deepseek.com/api_keys rồi thêm vào Keychain
-(lệnh `-w` cuối cùng sẽ hỏi key, không để lộ key trong lịch sử shell):
-
-```sh
-security add-generic-password -s ai-limit.deepseek -a default -U -w
-```
-
-Kiểm tra: `security find-generic-password -s ai-limit.deepseek -w`.
-Xoá: `security delete-generic-password -s ai-limit.deepseek`.
+Lấy API key tại https://platform.deepseek.com/api_keys, mở **Cài đặt**
+(nút cạnh **Thoát**), dán vào ô API key (ô nhập bị che) rồi bấm **Lưu vào
+Keychain**. App ghi thẳng vào macOS Keychain (mục `ai-limit.deepseek`)
+bằng API gốc Security.framework (`SecItemAdd`/`SecItemUpdate`, gọi qua
+purego, không cgo); key không bao giờ đi qua dòng lệnh, log hay thông báo
+lỗi. Nút **Kiểm tra** gọi API số dư và chỉ báo `Key hợp lệ` hoặc
+`Key sai/không dùng được`.
 
 App gọi `GET https://api.deepseek.com/user/balance` và hiển thị số dư
 (`total_balance`) theo USD nếu có; nếu tài khoản chỉ có CNY thì hiển thị
@@ -198,3 +196,15 @@ v0.1.1: giao diện theo khối dịch vụ, đếm ngược reset, màu thanh
 xanh/vàng/đỏ, email Claude thật, DeepSeek báo "chưa có key", dmg có lối tắt Applications.
 v0.1.2: phát hành tự động qua GitHub Actions, dmg build trên macOS với cửa sổ cài đặt tự mở.
 Grok Build dự kiến ở v0.2.0 (chưa hiện trong menu).
+
+## Cài đặt (v0.1.4)
+
+- Bật/tắt từng dịch vụ: Claude, Codex, DeepSeek, Grok. Dịch vụ tắt bị ẩn
+  khỏi danh sách và không được gọi. Lưu trong `config.json` (mục
+  `services`, không có secret). Grok mặc định tắt: chưa có nguồn số liệu.
+- Dịch vụ chưa cấu hình hiện một dòng hướng dẫn và nút **Mở Cài đặt**.
+- Claude/Codex: khi đã qua giờ reset mà chưa có số liệu mới, dòng hiện
+  `đã reset, chưa dùng`.
+- Nút **Làm mới** cạnh dòng "Cập nhật lúc": làm mới tất cả ngay, không bấm
+  được hai lần khi đang chạy. Claude vẫn giữ tối thiểu 5 phút giữa hai lần
+  gọi; nếu chưa đủ, khối Claude hiện `làm mới được sau X phút`.
